@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>혈압 트랙</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans+KR:wght@400;600&display=swap">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="app">
+  <canvas id="view" aria-label="우주 기지 위의 순환 트랙을 내려다보는 3D 장면"></canvas>
+  <div class="panel title">
+    <h1>혈압 트랙</h1>
+    <p id="ruleLine">100점을 먼저 모으면 1등. 남은 순위는 5분까지 겨룹니다.</p>
+    <button type="button" id="look" hidden>도감·구경</button>
+    <button type="button" id="home">메인으로</button>
+  </div>
+  <div class="panel clock"><b id="clock">5:00</b><span id="goalLine">100점 먼저</span></div>
+  <div class="panel board" aria-live="off">
+    <h2>SCORE</h2>
+    <ol id="scores"></ol>
+  </div>
+  <div class="panel views" id="views" role="group" aria-label="카메라 위치">
+    <button type="button" data-view="all" aria-pressed="true">전체</button>
+    <button type="button" data-view="s1" aria-pressed="false"><i style="--dot:#3aa0ff"></i>1구간 직선</button>
+    <button type="button" data-view="s2" aria-pressed="false"><i style="--dot:#22e0c8"></i>2구간 다리</button>
+    <button type="button" data-view="s3" aria-pressed="false"><i style="--dot:#ff8a2a"></i>3구간 협곡</button>
+    <button type="button" data-view="s4" aria-pressed="false"><i style="--dot:#ff3fa4"></i>4구간 결승</button>
+    <span class="break"></span>
+    <span id="cast" class="cast"></span>
+  </div>
+  <div class="panel card" id="card" hidden>
+    <span class="kind"></span>
+    <h2></h2>
+    <dl>
+      <dt>능력</dt><dd class="skill"></dd>
+      <dt>쓰는 법</dt><dd class="how"></dd>
+      <dt>상대하는 법</dt><dd class="counter"></dd>
+      <dt>체력</dt><dd class="hp"></dd>
+      <dt>골인하면</dt><dd class="score"></dd>
+      <dt>원작 참고</dt><dd class="origin"></dd>
+    </dl>
+    <div class="pager"><button type="button" data-step="prev" aria-label="이전 캐릭터">이전</button><span class="count"></span><button type="button" data-step="next" aria-label="다음 캐릭터">다음</button></div>
+  </div>
+  <div class="banner" id="banner" hidden><strong></strong><span></span><ol id="ranks"></ol><div class="row"><button type="button" id="again">다시 하기</button><button type="button" id="quit" class="ghost">메인으로</button></div></div>
+  <div class="pip" id="pip" hidden><em>능력 결과</em><b></b></div>
+  <div class="pad watch" id="watch" hidden>
+    <div class="me"><span class="who"></span><span class="gain"></span></div>
+    <button type="button" data-watch="prev" aria-label="이전 선수 보기">◀ 이전</button>
+    <button type="button" data-watch="next" aria-label="다음 선수 보기">다음 ▶</button>
+    <button type="button" id="replay">다시 하기</button>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <div class="pad" id="pad" hidden>
+    <div class="me"><span class="who"></span><span class="gain"></span><span class="tip"></span></div>
+    <button type="button" id="skill"><b></b><span></span></button>
+    <button type="button" id="hit"><b></b><span></span></button>
+  </div>
+  <div class="panel intro" id="intro" hidden>
+    <span class="kind"></span>
+    <h2></h2>
+    <p class="skill"></p>
+    <dl>
+      <dt>쓰는 법</dt><dd class="how"></dd>
+      <dt>골인하면</dt><dd class="score"></dd>
+      <dt>체력</dt><dd class="hp"></dd>
+    </dl>
+  </div>
+  <div class="stick" id="stick" hidden><i></i></div>
+  <div class="menu" id="menu">
+    <section class="screen" data-screen="home">
+      <div class="logo"><small>BLOOD PRESSURE TRACK</small><h2>혈압 트랙</h2><p>구간마다, 죽을 때마다 캐릭터가 바뀌는 여덟 명의 달리기.</p></div>
+      <label class="field"><span>내 이름</span><input type="text" id="name" maxlength="8" placeholder="이름을 정하세요" autocomplete="off" spellcheck="false"></label>
+      <nav>
+        <button type="button" id="go" class="primary"><b>빠른 시작</b><span>봇 일곱 명과 바로 한 판</span></button>
+        <button type="button" data-go="create"><b>방 만들기</b><span>인원, 시간, 목표 점수를 정합니다</span></button>
+        <button type="button" data-go="find"><b>방 찾기</b><span>열린 방 목록과 초대 코드</span></button>
+        <button type="button" data-go="book"><b>도감</b><span>캐릭터 36종과 맵 둘러보기</span></button>
+        <button type="button" data-go="settings"><b>설정</b><span>그래픽, 화면 표시, 조작법</span></button>
+      </nav>
+      <p class="note foot">온라인 대전은 아직 서버가 없습니다. 지금은 빈자리를 봇이 채웁니다.</p>
+    </section>
+    <section class="screen" data-screen="create" hidden>
+      <button type="button" class="back" data-go="home">← 메인</button>
+      <h3>방 만들기</h3>
+      <label class="field"><span>방 이름</span><input type="text" id="roomName" maxlength="16" autocomplete="off" spellcheck="false"></label>
+      <div class="field"><span>인원</span><div class="seg" data-room="players"><button type="button" data-value="2">2명</button><button type="button" data-value="4">4명</button><button type="button" data-value="6">6명</button><button type="button" data-value="8">8명</button></div></div>
+      <div class="field"><span>시간</span><div class="seg" data-room="seconds"><button type="button" data-value="180">3분</button><button type="button" data-value="300">5분</button><button type="button" data-value="480">8분</button></div></div>
+      <div class="field"><span>목표 점수</span><div class="seg" data-room="goal"><button type="button" data-value="50">50점</button><button type="button" data-value="100">100점</button><button type="button" data-value="150">150점</button></div></div>
+      <div class="field"><span>빈자리</span><div class="seg" data-room="bots"><button type="button" data-value="1">봇으로 채우기</button><button type="button" data-value="0">비워 두기</button></div></div>
+      <div class="field"><span>공개 범위</span><div class="seg" data-room="open"><button type="button" data-value="1">누구나</button><button type="button" data-value="0">초대 코드만</button></div></div>
+      <button type="button" class="primary wide" data-go="lobby">방 만들기</button>
+    </section>
+    <section class="screen" data-screen="lobby" hidden>
+      <button type="button" class="back" data-go="create">← 방 설정</button>
+      <h3 id="lobbyName"></h3>
+      <p class="note" id="lobbyRules"></p>
+      <div class="code"><span>초대 코드</span><b id="lobbyCode"></b><em>서버가 없어 아직 쓸 수 없습니다</em></div>
+      <ol class="slots" id="slots"></ol>
+      <button type="button" class="primary wide" id="startRoom">시작</button>
+      <p class="note" id="lobbyNote"></p>
+    </section>
+    <section class="screen" data-screen="find" hidden>
+      <button type="button" class="back" data-go="home">← 메인</button>
+      <h3>방 찾기</h3>
+      <div class="field"><span>초대 코드로 들어가기</span><div class="join"><input type="text" id="code" maxlength="4" placeholder="예: K7Q2" autocomplete="off" spellcheck="false"><button type="button" disabled>들어가기</button></div></div>
+      <div class="field"><span>열린 방</span>
+        <ol class="rooms">
+          <li><b>아무나 오세요</b><span>5분 · 100점</span><em>5 / 8</em><i>예시</i></li>
+          <li><b>협곡에서 만나요</b><span>8분 · 150점</span><em>3 / 6</em><i>예시</i></li>
+          <li><b>초보만</b><span>3분 · 50점</span><em>1 / 4</em><i>예시</i></li>
+        </ol>
+      </div>
+      <p class="note">위 목록은 화면 구성을 보여주는 예시입니다. 서버가 붙으면 실제로 열린 방이 여기에 뜨고, 들어가기 버튼이 켜집니다.</p>
+    </section>
+    <section class="screen" data-screen="settings" hidden>
+      <button type="button" class="back" data-go="home">← 메인</button>
+      <h3>설정</h3>
+      <div class="field"><span>그래픽</span><div class="seg" data-pref="quality"><button type="button" data-value="high">높음</button><button type="button" data-value="mid">보통</button><button type="button" data-value="low">낮음</button></div></div>
+      <div class="field"><span>공격 범위 표시</span><div class="seg" data-pref="range"><button type="button" data-value="1">켜기</button><button type="button" data-value="0">끄기</button></div></div>
+      <div class="field"><span>능력 결과 화면</span><div class="seg" data-pref="pip"><button type="button" data-value="1">켜기</button><button type="button" data-value="0">끄기</button></div></div>
+      <div class="field"><span>조작법</span>
+        <dl class="keys">
+          <dt>이동</dt><dd>W A S D 또는 방향키</dd>
+          <dt>능력</dt><dd>스페이스</dd>
+          <dt>공격</dt><dd>F · 발밑 점선 원 안의 가장 가까운 상대</dd>
+          <dt>터치 화면</dt><dd>왼쪽 조이스틱, 아래 버튼 두 개</dd>
+        </dl>
+      </div>
+      <p class="note">구간 문을 지날 때마다, 그리고 죽을 때마다 캐릭터가 무작위로 바뀝니다. 꽝이 걸렸다면 죽는 것이 살 길입니다. 1구간의 수정 벽은 부숴야 지나가고, 2구간 다리는 난간이 없어 밀리면 떨어지며, 3구간 협곡은 둘이 겨우 지나갑니다.</p>
+    </section>
+  </div>
+  <div class="fail" id="fail" hidden>이 브라우저에서는 3D 화면을 그릴 수 없습니다. WebGL을 지원하는 브라우저에서 열어주세요.</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/FXAAShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

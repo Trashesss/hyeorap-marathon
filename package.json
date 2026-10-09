@@ -1,0 +1,19 @@
+{
+  "name": "hyeorap-track",
+  "version": "0.1.0",
+  "description": "구간마다, 죽을 때마다 캐릭터가 바뀌는 여덟 명의 3D 달리기 게임",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "test:e2e": "node e2e/play.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

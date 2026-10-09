@@ -1,0 +1,24 @@
+# 의존성과 빌드 결과
+node_modules/
+dist/
+
+# 비밀 값: 키, 토큰, 인증서는 저장소에 넣지 않는다. 견본은 .env.example로 따로 둔다.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials*.json
+
+# 시험 중에 생기는 것
+e2e/out/
+*.log
+
+# 편집기와 운영체제
+.DS_Store
+.idea/
+.vscode/
+*.swp
