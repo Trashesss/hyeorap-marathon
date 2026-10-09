@@ -86,6 +86,18 @@ const before = await js(`__track.game.units[0].s`); await sleep(1000);
 check('앞으로 누르고 있으면 나아간다', (await js(`__track.game.units[0].s`)) !== before);
 await key('keyUp', 'w', 'KeyW', 87);
 
+// 마우스로 시점 돌리기: 화면을 오른쪽으로 끌면 시점이 돌고, 두 번 누르면 돌아온다. 이동 방향은 그대로다.
+const mouse = (type, x, y, extra = {}) => send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1, ...extra });
+await mouse('mousePressed', W * 0.6, H * 0.45); await mouse('mouseMoved', W * 0.6 + 60, H * 0.45 + 10); await mouse('mouseMoved', W * 0.6 + 200, H * 0.45 + 30); await mouse('mouseReleased', W * 0.6 + 200, H * 0.45 + 30);
+await sleep(500); await shot('4b-look');
+const turned = await js(`JSON.stringify(__track.look)`).then(JSON.parse);
+check('화면을 끌면 시점이 돈다', Math.abs(turned.yaw - 1.2) < 0.05 && turned.pitch > 0.1, `yaw ${turned.yaw.toFixed(2)}`);
+const lane = await js(`__track.game.units[0].lane`);
+await key('keyDown', 'w', 'KeyW', 87); await sleep(500); await key('keyUp', 'w', 'KeyW', 87);
+check('시점을 돌려도 W는 트랙을 따라 간다', Math.abs((await js(`__track.game.units[0].lane`)) - lane) < 0.6);
+await js(`document.getElementById('view').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+check('두 번 누르면 시점이 돌아온다', (await js(`__track.look.yaw`)) === 0);
+
 // 다리에서 떨어지기.
 await js(`{ const g = __track.game, me = g.units[0]; g.become(me, 'blink'); me.nextSkill = 1e9; me.s = 94.56 + 30; me.lane = 0; me.sec = 1; me.safeUntil = 0; }`);
 await key('keyDown', 'd', 'KeyD', 68); await sleep(1500); await key('keyUp', 'd', 'KeyD', 68);

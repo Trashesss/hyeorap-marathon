@@ -99,6 +99,7 @@ function setSpectate(on) {
   $('look').textContent = on ? (me.rank ? '선수 따라가며 보기' : '조종으로 돌아가기') : '도감·구경';
   camera.fov = on ? 36 : 52; camera.updateProjectionMatrix();
   if (on) screen.setView('all', true); else { screen.showCard('none'); screen.stopFlying(); snapCamera(); }
+  canvas.style.cursor = on ? '' : 'grab';
   held.clear(); skillHeld = hitHeld = false;
 }
 
@@ -147,7 +148,7 @@ function handle(event) {
 // ---------- 한 판의 시작과 끝 ----------
 function begin(rules) {
   menuEl.hidden = true; appEl.classList.remove('in-menu'); bannerEl.hidden = true; pipEl.hidden = true; $('look').hidden = false;
-  follow = null;
+  follow = null; screen.resetLook();
   game.start({ ...(rules || game.rules) });
   $('ruleLine').textContent = `${game.rules.goal}점을 먼저 모으면 1등. 남은 순위는 ${game.rules.seconds / 60}분까지 겨룹니다.`;
   $('goalLine').textContent = `${game.rules.goal}점 먼저`;
@@ -256,6 +257,16 @@ for (const type of ['pointerup', 'pointerleave', 'pointercancel']) { skillEl.add
   base.addEventListener('pointermove', (e) => { if (base.hasPointerCapture(e.pointerId)) move(e); });
   for (const type of ['pointerup', 'pointercancel']) base.addEventListener(type, release);
 }
+// 시점: 조종 중에 화면을 끌면 카메라가 돈다. 휠은 거리, 두 번 누르면 원래대로. 이동 방향은 바뀌지 않는다.
+{
+  let dragging = null, lastX = 0, lastY = 0;
+  const chasing = () => !spectate && game.mode === 'play';
+  canvas.addEventListener('pointerdown', (e) => { if (!chasing() || dragging !== null) return; dragging = e.pointerId; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
+  canvas.addEventListener('pointermove', (e) => { if (e.pointerId !== dragging) return; screen.turnLook(e.clientX - lastX, e.clientY - lastY); lastX = e.clientX; lastY = e.clientY; });
+  for (const type of ['pointerup', 'pointercancel']) canvas.addEventListener(type, (e) => { if (e.pointerId !== dragging) return; dragging = null; canvas.style.cursor = spectate ? '' : 'grab'; });
+  canvas.addEventListener('wheel', (e) => { if (!chasing()) return; e.preventDefault(); screen.zoomLook(e.deltaY); }, { passive: false });
+  canvas.addEventListener('dblclick', () => { if (chasing()) screen.resetLook(); });
+}
 // 지금 쥐고 있는 키와 조이스틱을 계산에 넘길 입력 한 벌로.
 function readInput() {
   const on = (...keys) => (keys.some((k) => held.has(k)) ? 1 : 0);
@@ -335,6 +346,6 @@ export function start() {
   const initial = location.hash.slice(1);
   if (initial === 'play') begin(DEFAULT_RULES); else if (screen.VIEWS[initial]) browse(initial, true); else showMenu();
   // 시험용: 주소에 ?debug를 붙이면 안쪽 상태를 콘솔에서 만질 수 있다.
-  if (new URLSearchParams(location.search).has('debug')) window.__track = { game, stage, get follow() { return follow; } };
+  if (new URLSearchParams(location.search).has('debug')) window.__track = { game, stage, look: screen.look, get follow() { return follow; } };
   frame();
 }

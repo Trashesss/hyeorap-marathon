@@ -129,14 +129,25 @@ export function resize(quality) {
   if (!pipEl.hidden) sizePip();
 }
 
-// 조종 카메라: 따라갈 몸의 뒤 위에서 진행 방향을 바라본다.
+// 조종 중에 마우스로 돌린 시점. yaw는 진행 방향에서 옆으로 돌린 각(라디안), pitch는 내려다보는 정도, zoom은 거리 배율.
+// 길을 따라 돌아도 이 값은 그대로라서, 뒤를 보게 돌려 두면 계속 뒤를 본다.
+export const look = { yaw: 0, pitch: 0, zoom: 1, movedAt: -9999 };
+const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+// 화면을 끈 만큼 돌린다. 도감·구경의 자유 카메라처럼 장면이 손을 따라온다.
+export function turnLook(dx, dy) { look.yaw += dx * 0.006; look.pitch = clamp(look.pitch + dy * 0.004, -0.75, 1); look.movedAt = performance.now(); }
+export function zoomLook(delta) { look.zoom = clamp(look.zoom * Math.exp(delta * 0.001), 0.6, 1.8); look.movedAt = performance.now(); }
+export function resetLook() { look.yaw = 0; look.pitch = 0; look.zoom = 1; look.movedAt = performance.now(); }
+
+// 조종 카메라: 따라갈 몸의 뒤 위에서 진행 방향을 바라본다. 마우스로 돌렸으면 그만큼 돌아간 자리에서 본다.
 const camWant = new THREE.Vector3(), camLook = new THREE.Vector3(), camLookWant = new THREE.Vector3();
 export function chase(body, dt, snap) {
   locate(body.s, body.lane, at);
   locate(body.s + 5, 0, ahead);
-  const len = Math.hypot(ahead.tx, ahead.tz) || 1, tx = ahead.tx / len, tz = ahead.tz / len, narrow = DEEP[at.index];
-  camWant.set(at.x - tx * (18.5 - narrow * 9.5), 12.5 + narrow * 11, at.z - tz * (18.5 - narrow * 9.5)); camLookWant.set(at.x + tx * (9 - narrow * 5), 1.6, at.z + tz * (9 - narrow * 5));
-  const k = snap ? 1 : 1 - Math.exp(-dt * 4.5);
+  const heading = Math.atan2(ahead.tx, ahead.tz) + look.yaw, dx = Math.sin(heading), dz = Math.cos(heading), narrow = DEEP[at.index];
+  const back = (18.5 - narrow * 9.5) * look.zoom, height = (12.5 + narrow * 11) * look.zoom * (1 + look.pitch), front = 9 - narrow * 5;
+  camWant.set(at.x - dx * back, height, at.z - dz * back); camLookWant.set(at.x + dx * front, 1.6, at.z + dz * front);
+  // 손으로 돌리는 동안에는 바로 따라오게 한다.
+  const k = snap ? 1 : 1 - Math.exp(-dt * (performance.now() - look.movedAt < 300 ? 20 : 4.5));
   camera.position.lerp(camWant, k); camLook.lerp(camLookWant, k); camera.lookAt(camLook);
 }
 
