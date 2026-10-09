@@ -116,3 +116,10 @@ test('계산 모듈은 브라우저와 three.js에 기대지 않는다', async (
     for (const [, from] of code.matchAll(/from '([^']+)'/g)) assert.ok(from.startsWith('./'), `${file}이 계산 폴더 밖(${from})을 불러온다`);
   }
 });
+
+test('리드미의 캐릭터 표가 캐릭터 자료와 같다', async () => {
+  const fs = await import('node:fs');
+  const { render } = await import('../scripts/characters-doc.mjs');
+  const readme = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.equal(render(readme), readme, 'npm run docs:characters 를 돌려 표를 다시 만들어야 한다');
+});
