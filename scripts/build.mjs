@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
-const bundle = await build({ entryPoints: [path.join(root, 'src/main.js')], bundle: true, format: 'iife', target: 'es2020', minify: process.argv.includes('--minify'), write: false, legalComments: 'none' });
+const bundle = await build({ entryPoints: [path.join(root, 'src/main.js')], bundle: true, format: 'iife', target: 'es2020', minify: process.argv.includes('--minify'), write: false, legalComments: 'none', charset: 'utf8' });
 const script = bundle.outputFiles[0].text.replace(/<\/script/g, '<\\/script');
 const page = read('index.html')
   .replace('<link rel="stylesheet" href="./styles.css">', () => `<style>\n${read('styles.css')}</style>`)
