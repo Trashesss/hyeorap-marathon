@@ -27,9 +27,9 @@ export const INFO = {
   builder: { name: '로동로봇', kind: '설치하는 패', color: '#f5b301', speed: 5, top: 4.6, hp: 5, atk: 2, score: '2점', origin: 'SCV의 배럭',
     skill: '가건물을 짓습니다. 길을 막고, 20초 동안 부서지지 않으면 30점을 받습니다. 캐릭터가 바뀌어도 점수는 지은 사람이 받습니다.',
     how: '스페이스. 내 바로 뒤에 지어집니다.', counter: '가건물을 공격해 부수세요.' },
-  heuong: { name: '흐엉', kind: '꽝', color: '#8f84c8', speed: 1.6, top: 10, hp: Infinity, atk: 0, score: '95점', origin: '속업 안 된 대군주',
-    skill: '무적입니다. 맞지도, 얼지도, 끌려가지도 않습니다. 대신 가장 느립니다.',
-    how: '그냥 가세요. 골인만 하면 95점입니다.', counter: '막을 방법은 판 엎기 같은 점수 초기화뿐입니다.' },
+  heuong: { name: '흐엉', kind: '꽝', color: '#8f84c8', speed: 1.6, top: 10, hp: Infinity, atk: 0, score: '-15점', origin: '속업 안 된 대군주',
+    skill: '가장 느리고, 골인하면 15점을 잃습니다. 무적이라 맞아 죽어서 바꿀 수도 없습니다.',
+    how: '다음 구간 문까지 가면 바뀝니다. 4구간에서 걸렸다면 결승선을 넘는 수밖에 없습니다.', counter: '건드릴 수 없고, 건드릴 이유도 없습니다. 느려서 길을 막으니 비켜 가세요.' },
   boulder: { name: '짱돌', kind: '꽝', color: '#9aa0ad', speed: 2.4, top: 3.4, hp: 1, atk: 99, rate: 2, score: '4점', origin: '스타2판 집정관',
     skill: '한 대 치면 누구든 죽습니다. 하지만 엄청 느리고 체력이 1입니다.',
     how: 'F로 공격합니다. 한 번 치면 2초를 쉽니다.', counter: '다가오기 전에 먼저 치세요.' },
@@ -132,6 +132,6 @@ export const SIZE = { cannon: 1.7, moldhouse: 1.9, dog: 1.2, piggy: 1.5, van: 1.
 // 주차 단속에 걸리는, 바퀴 달린 캐릭터.
 export const WHEELED = new Set(['iceman', 'van', 'sportscar', 'jackpot', 'builder']);
 // 골인하면 받는 점수. 여기 없는 캐릭터는 저마다 다른 규칙을 따른다.
-export const FIXED_GAIN = { possess: 6, bomber: 5, cannon: 4, draw: 6, homesick: 6, dog: 35, piggy: 1, liar: 5, mold: 2, moldhouse: 78, ninja: 6, iceman: 18, parking: 17, exile: 9, van: 8, snail: 7, swap: 6, copier: 6, blink: 5, builder: 2, heuong: 95, boulder: 4, sportscar: 3, rent: 0, wallet: -10, jackpot: 90, owl: 6, ghost: -7, genki: 0, pot: 0 };
+export const FIXED_GAIN = { possess: 6, bomber: 5, cannon: 4, draw: 6, homesick: 6, dog: 35, piggy: 1, liar: 5, mold: 2, moldhouse: 78, ninja: 6, iceman: 18, parking: 17, exile: 9, van: 8, snail: 7, swap: 6, copier: 6, blink: 5, builder: 2, heuong: -15, boulder: 4, sportscar: 3, rent: 0, wallet: -10, jackpot: 90, owl: 6, ghost: -7, genki: 0, pot: 0 };
 // 뽑힐 확률의 배율. 판을 크게 흔드는 캐릭터는 원작처럼 드물게 나온다.
 export const ODDS = { heuong: 0.4, jackpot: 0.5, pot: 0.5, genki: 0.5, flipper: 0.6 };
