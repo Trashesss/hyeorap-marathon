@@ -3,7 +3,7 @@ import { canvas, renderer } from './renderer.js';
 import { camera, scene } from './world.js';
 import { POD_Z, lineup, stageLineup } from './stage.js';
 import { DEEP, locate } from '../sim/track.js';
-import { INFO } from '../sim/characters.js';
+import { ATTACKS, ATTACK_OF, INFO } from '../sim/characters.js';
 
 // ---------- 화면 합성 ----------
 // 밝은 값까지 담는 버퍼에 그린 뒤 번짐, 톤 매핑, 윤곽 다듬기를 차례로 거친다.
@@ -75,11 +75,21 @@ const card = document.getElementById('card');
 document.getElementById('cast').innerHTML = '<button type="button" data-view="cast" aria-pressed="false">캐릭터 전체</button>' +
   lineup.map((entry, n) => `<button type="button" data-view="c${n}" aria-pressed="false"><i style="--dot:${INFO[entry.id].color}"></i>${INFO[entry.id].name}</button>`).join('');
 let shown = -1;
+// 도감 카드가 바뀔 때 불리는 함수. 장면 쪽이 그 캐릭터의 공격 범위를 그리는 데 쓴다.
+let onCard = null;
+export function whenCardChanges(callback) { onCard = callback; }
+// 캐릭터의 공격을 한 줄로: 방식, 피해, 설명.
+export function attackLine(id) {
+  const info = INFO[id]; if (!info.atk) return '공격 못 함';
+  const way = ATTACKS[ATTACK_OF[id] || 'smash'], damage = info.atk + (way.bonus || 0);
+  return `${way.name} · ${damage >= 99 ? '맞으면 즉사' : `한 대에 ${damage}`} · ${way.say}`;
+}
 export function showCard(name) {
   shown = /^c\d+$/.test(name) ? +name.slice(1) : -1;
   const entry = lineup[shown];
   card.hidden = !entry;
   stageLineup(name === 'cast' || !!entry, entry);
+  if (onCard) onCard(entry || null);
   if (!entry) return;
   const info = INFO[entry.id];
   card.style.setProperty('--dot', info.color);
@@ -88,7 +98,8 @@ export function showCard(name) {
   card.querySelector('.skill').textContent = info.skill;
   card.querySelector('.how').textContent = info.how;
   card.querySelector('.counter').textContent = info.counter;
-  card.querySelector('.hp').textContent = info.hp === Infinity ? '무적' : `${info.hp} · 한 대에 ${info.atk >= 99 ? '즉사' : info.atk || '공격 못 함'}`;
+  card.querySelector('.hp').textContent = info.hp === Infinity ? '무적' : info.hp;
+  card.querySelector('.atk').textContent = attackLine(entry.id);
   card.querySelector('.score').textContent = info.score;
   card.querySelector('.origin').textContent = info.origin;
   card.querySelector('.count').textContent = `${shown + 1} / ${lineup.length}`;

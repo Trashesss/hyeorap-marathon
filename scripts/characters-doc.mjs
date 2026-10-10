@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { INFO, ROSTER } from '../src/sim/characters.js';
+import { ATTACKS, ATTACK_OF, INFO, ROSTER } from '../src/sim/characters.js';
 
 const readme = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../README.md');
 const START = '<!-- characters:start -->', END = '<!-- characters:end -->';
@@ -16,10 +16,10 @@ const KINDS = [
   ['설치하는 패', '길 위에 무언가를 남깁니다.'],
   ['점수를 흔드는 패', '골인했을 때 판이 크게 움직입니다.'],
   ['꽝', '걸리면 손해입니다. 죽어서 바꾸는 것이 살 길입니다.'],
-  ['장애물', '조종하는 캐릭터가 아니라 길 위에 놓인 것입니다.'],
 ];
 const cell = (text) => String(text).replace(/\|/g, '\\|').replace(/\n/g, ' ');
-const body = (info) => (info.hp === Infinity ? '무적' : `체력 ${info.hp}`) + ' · ' + (info.atk ? (info.atk >= 99 ? '한 대면 즉사' : `한 대에 ${info.atk}`) : '공격 못 함');
+const strike = (id, info) => { if (!info.atk) return '공격 못 함'; const way = ATTACKS[ATTACK_OF[id] || 'smash'], damage = info.atk + (way.bonus || 0); return `${way.name} ${damage >= 99 ? '즉사' : damage}`; };
+const body = (id, info) => (info.hp === Infinity ? '무적' : `체력 ${info.hp}`) + ' · ' + strike(id, info);
 
 export function table() {
   const known = new Set(KINDS.map(([kind]) => kind));
@@ -29,7 +29,7 @@ export function table() {
     const ids = ROSTER.filter((id) => INFO[id].kind === kind).sort((a, b) => INFO[a].name.localeCompare(INFO[b].name, 'ko'));
     if (!ids.length) continue;
     parts.push(`### ${kind} (${ids.length})`, '', note, '', '| 캐릭터 | 능력 | 쓰는 법 | 상대하는 법 | 골인하면 | 몸 |', '|---|---|---|---|---|---|');
-    for (const id of ids) { const info = INFO[id]; parts.push(`| **${cell(info.name)}** | ${cell(info.skill)} | ${cell(info.how)} | ${cell(info.counter)} | ${cell(info.score)} | ${body(info)} |`); }
+    for (const id of ids) { const info = INFO[id]; parts.push(`| **${cell(info.name)}** | ${cell(info.skill)} | ${cell(info.how)} | ${cell(info.counter)} | ${cell(info.score)} | ${body(id, info)} |`); }
     parts.push('');
   }
   return parts.join('\n').trimEnd();

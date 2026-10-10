@@ -3,8 +3,8 @@
 import { C, FONT_KR, FONT_NUM, GOLD, PUPIL, TAU, UP, V, add, additive, ball, box, canvasTexture, cyl, glow, label, limb, rbox, toy } from './tools.js';
 import { M, camera, energyMaterial, flicker, scene, spinners } from './world.js';
 import { makeCharacter } from './models.js';
-import { TRACK_Y, locate } from '../sim/track.js';
-import { INFO, ROWS } from '../sim/characters.js';
+import { TOTAL, TRACK_Y, locate } from '../sim/track.js';
+import { ATTACKS, ATTACK_OF, INFO, ROWS } from '../sim/characters.js';
 import { BODY, FREEZE_RADIUS } from '../sim/game.js';
 
 // ---------- 도감 무대 ----------
@@ -66,6 +66,8 @@ export function drawBoard(ranked, goal) {
 // myIndex: 이 화면의 주인이 모는 자리. 그 자리만 표시가 다르다.
 export function createStage(game, myIndex) {
   const at = {}, at2 = {};
+  // 순환 트랙에서 두 거리의 차이를 가까운 쪽으로 잰다.
+  const shortest = (ds) => (ds > TOTAL / 2 ? ds - TOTAL : ds < -TOTAL / 2 ? ds + TOTAL : ds);
   const darkBar = () => new THREE.MeshBasicMaterial({ color: C('#0a1220'), transparent: true, opacity: 0.8, depthTest: false });
 
   // 구간마다, 그리고 죽을 때마다 캐릭터가 바뀌므로 모델을 빌려 쓰고 돌려준다.
@@ -90,14 +92,25 @@ export function createStage(game, myIndex) {
     return { group, marker, ice, bar, fill, ticket, figure: null, id: null, face: null, aimYaw: 0 };
   });
 
-  // 두리안.
-  const durianView = { figure: makeCharacter('durian'), bar: new THREE.Group(), fill: null };
+  // 협곡 차단벽: 기둥 사이를 막는 셔터. 맵의 문이라는 것이 한눈에 보이도록 경고 줄무늬와 경광등을 달았다.
+  const gate = { group: new THREE.Group(), shutter: new THREE.Group(), bar: new THREE.Group(), fill: null, lamps: [] };
   {
-    locate(game.durian.s, 0, at);
-    durianView.figure.position.set(at.x, TRACK_Y, at.z); durianView.figure.rotation.y = Math.atan2(at.tx, at.tz) + Math.PI; scene.add(durianView.figure);
-    durianView.bar.position.set(at.x, 7.4, at.z); scene.add(durianView.bar);
-    add(durianView.bar, new THREE.PlaneGeometry(4.2, 0.5), darkBar());
-    durianView.fill = add(durianView.bar, new THREE.PlaneGeometry(4, 0.3), glow('#a8e04a', 1.6, { depthTest: false }), 0, 0, 0.01);
+    locate(game.barrier.s, 0, at);
+    gate.group.position.set(at.x, TRACK_Y, at.z); gate.group.rotation.y = Math.atan2(at.tx, at.tz); scene.add(gate.group);
+    for (const side of [1, -1]) {
+      box(gate.group, 1.0, 5.2, 1.4, M.dark, side * 4.15, 2.6, 0); box(gate.group, 1.2, 0.4, 1.6, M.mid, side * 4.15, 0.2, 0);
+      box(gate.group, 0.16, 4.4, 1.44, glow('#ff8a2a', 2.2), side * 3.62, 2.6, 0);
+      gate.lamps.push(ball(gate.group, 0.28, glow('#ff3b3b', 4), side * 4.15, 5.5, 0));
+    }
+    box(gate.group, 9.3, 0.7, 1.4, M.dark, 0, 5.0, 0);
+    gate.group.add(gate.shutter);
+    for (const x of [-2.36, 0, 2.36]) {
+      box(gate.shutter, 2.28, 3.9, 0.5, M.mid, x, 2.25, 0); box(gate.shutter, 2.3, 0.7, 0.56, M.hazard, x, 3.3, 0); box(gate.shutter, 2.3, 0.7, 0.56, M.hazard, x, 1.0, 0);
+      box(gate.shutter, 1.5, 0.16, 0.58, glow('#ff8a2a', 1.8), x, 2.15, 0);
+    }
+    gate.bar.position.set(at.x, 7.2, at.z); scene.add(gate.bar);
+    add(gate.bar, new THREE.PlaneGeometry(4.2, 0.5), darkBar());
+    gate.fill = add(gate.bar, new THREE.PlaneGeometry(4, 0.3), glow('#ffb347', 1.6, { depthTest: false }), 0, 0, 0.01);
   }
   // 수정 벽.
   const crystalMat = new THREE.MeshPhysicalMaterial({ color: C('#7fc4ff'), roughness: 0.12, clearcoat: 1, emissive: C('#2a6fd0'), emissiveIntensity: 0.9 });
@@ -170,7 +183,46 @@ export function createStage(game, myIndex) {
   const pulses = [0, 1].map(() => { const mesh = add(scene, new THREE.RingGeometry(0.9, 1, 64), additive('#9fe8ff', 2.4, null, 0), 0, TRACK_Y + 0.1, 0); mesh.rotation.x = -Math.PI / 2; return { mesh, at: -9 }; });
   // 머리 위로 떠오르는 글자.
   const popups = [];
-  // 공격 범위와 조준: 내 발밑의 점선 원 안에 들어온 가장 가까운 상대를 친다. 칠 상대의 발밑에는 붉은 조준 표시가 돈다.
+  // ---------- 공격 ----------
+  // 트랙을 편 좌표(거리, 좌우)의 점들을 장면으로 옮겨 띠로 그린다. 길이 굽으면 띠도 따라 굽는다.
+  function makeTrail(maxPoints, material) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(maxPoints * 6), 3));
+    const index = []; for (let n = 0; n < maxPoints - 1; n++) { const b = n * 2; index.push(b, b + 1, b + 2, b + 1, b + 3, b + 2); }
+    geo.setIndex(index);
+    const mesh = new THREE.Mesh(geo, material); mesh.frustumCulled = false; mesh.visible = false; scene.add(mesh);
+    return { mesh, max: maxPoints, xs: new Float32Array(maxPoints), zs: new Float32Array(maxPoints) };
+  }
+  // points는 [거리, 좌우] 쌍의 배열. place를 주면 그 함수로 장면 좌표를 구한다(도감 무대용).
+  function drawTrail(trail, points, width, y, place = null) {
+    const pos = trail.mesh.geometry.attributes.position, count = Math.min(points.length, trail.max), { xs, zs } = trail;
+    for (let n = 0; n < count; n++) {
+      if (place) { const [x, z] = place(points[n][0], points[n][1]); xs[n] = x; zs[n] = z; }
+      else { locate(points[n][0], points[n][1], at); xs[n] = at.x; zs[n] = at.z; }
+    }
+    for (let n = 0; n < count; n++) {
+      const a = Math.max(0, n - 1), b = Math.min(count - 1, n + 1);
+      let dx = xs[b] - xs[a], dz = zs[b] - zs[a]; const len = Math.hypot(dx, dz) || 1; dx /= len; dz /= len;
+      pos.setXYZ(n * 2, xs[n] - (dz * width) / 2, y, zs[n] + (dx * width) / 2);
+      pos.setXYZ(n * 2 + 1, xs[n] + (dz * width) / 2, y, zs[n] - (dx * width) / 2);
+    }
+    pos.needsUpdate = true; trail.mesh.geometry.setDrawRange(0, Math.max(0, count - 1) * 6); trail.mesh.visible = count > 1;
+  }
+  // 공격 방식의 범위 테두리. who는 자리와 보는 쪽(s, lane, dirS, dirL)을 가진 것.
+  function outline(way, who) {
+    const P = (along, across) => [who.s + who.dirS * along - who.dirL * across, who.lane + who.dirL * along + who.dirS * across];
+    const circle = (cs, cl, r) => Array.from({ length: 33 }, (_, k) => [cs + Math.cos((k / 32) * TAU) * r, cl + Math.sin((k / 32) * TAU) * r]);
+    if (way.shape === 'cone') { const r = way.reach + BODY, pts = [P(0, 0)]; for (let k = 0; k <= 12; k++) { const a = -1 + k / 6; pts.push(P(Math.cos(a) * r, Math.sin(a) * r)); } pts.push(P(0, 0)); return pts; }
+    if (way.shape === 'line') {
+      const w = way.width + BODY * 0.5, pts = [];
+      for (let k = 0; k <= 10; k++) pts.push(P(1 + ((way.reach - 1) * k) / 10, w));
+      for (let k = 10; k >= 0; k--) pts.push(P(1 + ((way.reach - 1) * k) / 10, -w));
+      pts.push(pts[0]); return pts;
+    }
+    if (way.shape === 'lob') { const drop = game.landing(who, way); return circle(drop.s, drop.lane, way.radius); }
+    return circle(who.s, who.lane, way.shape === 'burst' ? way.radius : way.reach + BODY);
+  }
+  // 내 공격 범위: 테두리가 늘 보이고, 맞을 상대가 있으면 붉어진다. 맞을 상대의 발밑에는 조준 표시가 돈다.
   function dashedRing(inner, outer, dashes, fill) {
     const pos = [], index = [];
     for (let n = 0; n < dashes; n++) for (let k = 0; k <= 4; k++) {
@@ -182,11 +234,18 @@ export function createStage(game, myIndex) {
     return geo;
   }
   const RANGE_IDLE = C('#ffffff').multiplyScalar(1.4), RANGE_AIM = C('#ff5d5d').multiplyScalar(3);
-  const rangeRing = add(scene, dashedRing(0.965, 1, 44, 0.55), additive('#ffffff', 1.4, null, 0.5)); rangeRing.visible = false;
-  const reticle = add(scene, dashedRing(0.8, 1, 4, 0.62), additive('#ff4d4d', 3.2, null, 0.95)); reticle.visible = false;
-  // 휘두른 자국과 맞은 자리의 섬광.
+  const range = makeTrail(48, additive('#ffffff', 1.4, null, 0.5));
+  const reticleGeo = dashedRing(0.8, 1, 4, 0.62);
+  const reticles = Array.from({ length: 4 }, () => { const mesh = add(scene, reticleGeo, additive('#ff4d4d', 3.2, null, 0.95)); mesh.visible = false; return mesh; });
+  // 예고: 저격의 조준선, 터뜨리기의 범위, 던진 것이 떨어질 자리. 누구의 것이든 모두에게 보인다.
+  const warnings = Array.from({ length: 12 }, () => makeTrail(48, additive('#ff3b3b', 2.6, null, 0.9)));
+  const shellViews = game.shells.map(() => { const mesh = ball(scene, 0.45, glow('#ffd27a', 4), 0, 0, 0); mesh.visible = false; return mesh; });
+  // 쏜 자국.
+  const tracers = Array.from({ length: 8 }, () => ({ trail: makeTrail(12, additive('#ffffff', 4, null, 1)), at: -9, life: 0.2 }));
+  // 휘두른 자국, 퍼지는 고리, 맞은 자리의 섬광.
   const slashGeo = new THREE.RingGeometry(0.5, 1, 24, 1, -0.9, 1.8); slashGeo.rotateX(-Math.PI / 2);
-  const slashes = Array.from({ length: 10 }, () => { const mesh = add(scene, slashGeo, additive('#ffffff', 3, null, 0)); mesh.visible = false; return { mesh, at: -9, dir: 0, reach: 3, unit: 0 }; });
+  const slashes = Array.from({ length: 12 }, () => { const mesh = add(scene, slashGeo, additive('#ffffff', 3, null, 0)); mesh.visible = false; return { mesh, at: -9, dir: 0, reach: 3, unit: 0, sweep: 1, life: 0.34 }; });
+  const rings = Array.from({ length: 8 }, () => { const mesh = add(scene, new THREE.RingGeometry(0.86, 1, 48), additive('#ffffff', 3, null, 0), 0, TRACK_Y + 0.14, 0); mesh.rotation.x = -Math.PI / 2; mesh.visible = false; return { mesh, at: -9, radius: 3, life: 0.4 }; });
   const burstTex = canvasTexture(128, 128, (g) => {
     g.translate(64, 64);
     const core = g.createRadialGradient(0, 0, 0, 0, 0, 60); core.addColorStop(0, 'rgba(255,255,255,1)'); core.addColorStop(0.3, 'rgba(255,255,255,0.45)'); core.addColorStop(1, 'rgba(255,255,255,0)');
@@ -199,7 +258,10 @@ export function createStage(game, myIndex) {
     sprite.visible = false; scene.add(sprite);
     return { sprite, at: -9, size: 4 };
   });
-  let slashTurn = 0, burstTurn = 0, pulseTurn = 0;
+  let slashTurn = 0, burstTurn = 0, pulseTurn = 0, ringTurn = 0, tracerTurn = 0;
+  const ringAt = (s, lane, radius, hex, life = 0.4) => { const ring = rings[ringTurn++ % rings.length]; locate(s, lane, at); Object.assign(ring, { at: game.time, radius, life }); ring.mesh.position.set(at.x, TRACK_Y + 0.14, at.z); ring.mesh.material.color.copy(C(hex)).multiplyScalar(3); };
+  // 공격 동작이 이어지는 시간(초). 방식마다 다르다.
+  const SWING = { claw: 0.2, smash: 0.32, shot: 0.2, snipe: 0.3, lob: 0.36, burst: 0.36 };
 
   // 계산이 남긴 사건 가운데 장면에 그릴 것들. 처리했으면 참을 돌려준다.
   function handle(event) {
@@ -214,16 +276,29 @@ export function createStage(game, myIndex) {
       const b = bursts[burstTurn++ % bursts.length];
       locate(event.s, event.lane, at);
       b.at = time; b.size = event.size; b.sprite.position.set(at.x, TRACK_Y + 1.8, at.z);
-    } else if (event.type === 'swing') {
-      // 상대 쪽으로 몸을 틀어 내지르고, 닿는 거리만큼 부채꼴 자국을 남긴다.
-      const unit = game.units[event.unit], view = views[event.unit];
+    } else if (event.type === 'attack') {
+      // 보는 쪽(맞을 상대가 있으면 그쪽)으로 몸을 틀고, 방식에 맞는 자국을 남긴다.
+      const unit = game.units[event.unit], view = views[event.unit], tint = event.unit === myIndex ? '#ffffff' : unit.player.color;
       locate(unit.s, unit.lane, at);
-      let dx = at.tx, dz = at.tz;
+      let dx = at.tx * event.dirS + at.tz * event.dirL, dz = at.tz * event.dirS - at.tx * event.dirL;
       if (event.to) { locate(event.to.s, event.to.lane, at2); dx = at2.x - at.x; dz = at2.z - at.z; }
       view.aimYaw = Math.atan2(dx, dz);
-      const slash = slashes[slashTurn++ % slashes.length];
-      Object.assign(slash, { at: time, dir: Math.atan2(-dz, dx), reach: event.reach, unit: event.unit });
-      slash.mesh.material.color.copy(C(event.unit === myIndex ? '#ffffff' : unit.player.color)).multiplyScalar(event.hit ? 4.5 : 1.8);
+      const slashNow = (delay, sweep, reach, life) => { const slash = slashes[slashTurn++ % slashes.length]; Object.assign(slash, { at: time + delay, dir: Math.atan2(-dz, dx), reach, unit: event.unit, sweep, life }); slash.mesh.material.color.copy(C(tint)).multiplyScalar(event.hit ? 4.5 : 1.8); };
+      if (event.way === 'claw') { slashNow(0, 1, event.reach + BODY * 0.6, 0.16); slashNow(0.09, -1, event.reach + BODY * 0.6, 0.16); }
+      else if (event.way === 'smash') { slashNow(0, 1, event.reach + BODY, 0.34); ringAt(unit.s, unit.lane, event.reach + BODY, tint, 0.3); }
+      else if (event.way === 'shot' || event.way === 'snipe') {
+        // 맞은 데까지, 안 맞았으면 닿는 끝까지 곧게 긋는다.
+        const tracer = tracers[tracerTurn++ % tracers.length];
+        let ds = event.dirS * event.reach, dl = event.dirL * event.reach;
+        if (event.to) { ds = shortest(event.to.s - unit.s); dl = event.to.lane - unit.lane; }
+        drawTrail(tracer.trail, Array.from({ length: 9 }, (_, k) => [unit.s + (ds * k) / 8, unit.lane + (dl * k) / 8]), event.way === 'snipe' ? 0.5 : 0.28, TRACK_Y + 1.6);
+        tracer.at = time; tracer.life = event.way === 'snipe' ? 0.34 : 0.18; tracer.trail.mesh.material.color.copy(C(tint)).multiplyScalar(event.way === 'snipe' ? 6 : 4);
+      }
+    } else if (event.type === 'blast') {
+      ringAt(event.s, event.lane, event.radius, '#ffb347', 0.45);
+      const b = bursts[burstTurn++ % bursts.length];
+      locate(event.s, event.lane, at);
+      b.at = time; b.size = event.radius * 2.4; b.sprite.position.set(at.x, TRACK_Y + 1.8, at.z);
     } else if (event.type === 'zap') {
       const beam = beams.find((b) => b.until < time); if (!beam) return true;
       locate(event.from.s, event.from.lane, at); locate(event.to.s, event.to.lane, at2);
@@ -252,7 +327,7 @@ export function createStage(game, myIndex) {
     locate((carrier || unit).s, (carrier || unit).lane, at);
     view.group.position.set(at.x, TRACK_Y + (carrier ? 3.4 : 0), at.z);
     // 움직이는 쪽을 바라본다. 멈추면 보던 쪽을 그대로 보고, 공격할 때는 상대 쪽으로 몸을 틀어 내지른다. 맞으면 잠깐 떤다.
-    const lunge = (time - unit.lungeAt) / 0.26, thrust = lunge < 1 ? Math.sin(lunge * Math.PI) : 0;
+    const lunge = (time - unit.lungeAt) / (SWING[unit.swing] || 0.26), thrust = lunge < 1 ? Math.sin(lunge * Math.PI) : 0;
     if (view.face === null) view.face = Math.atan2(at.tx, at.tz);
     if (!carrier && Math.hypot(unit.vs, unit.vl) > 0.6) view.face = turnTo(view.face, Math.atan2(at.tx * unit.vs + at.tz * unit.vl, at.tz * unit.vs - at.tx * unit.vl), Math.min(1, dt * 12));
     view.group.rotation.y = carrier ? time * 4 : turnTo(view.face, view.aimYaw, Math.min(1, thrust * 2.5));
@@ -267,10 +342,17 @@ export function createStage(game, myIndex) {
     view.ticket.visible = unit.ticketUntil > time;
     // 새로 바뀐 캐릭터는 작게 나타나 제 크기로 커진다. 막 태어나 무적인 동안은 깜빡인다.
     const grown = Math.min(1, (time - unit.bornAt) / 0.35);
-    view.figure.scale.setScalar(0.85 * (0.25 + 0.75 * grown * (2 - grown)) * (carrier ? 0.6 : 1));
+    // 예고 중인 공격: 터뜨리기는 몸이 부풀고, 저격은 몸을 낮춘다.
+    const charge = unit.windup ? Math.min(1, (time - unit.windup.at) / (unit.windup.until - unit.windup.at)) : 0;
+    const swell = unit.windup && unit.windup.way === 'burst' ? 1 + charge * 0.3 : unit.swing === 'burst' ? 1 + thrust * 0.35 : 1;
+    view.figure.scale.setScalar(0.85 * (0.25 + 0.75 * grown * (2 - grown)) * (carrier ? 0.6 : 1) * swell);
     view.figure.visible = !(unit.safeUntil > time && Math.floor(time * 12) % 2);
-    view.figure.position.z = thrust * 1.8;
-    view.figure.position.x = time - unit.hurtAt < 0.2 ? Math.sin(time * 95) * 0.25 : 0;
+    // 방식마다 몸짓이 다르다: 긁기는 짧게 좌우로, 내려치기는 뛰어올라 찍고, 쏘기는 반동으로 물러나고, 던지기는 젖혔다 숙인다.
+    const way = unit.swing, figure = view.figure;
+    figure.position.z = way === 'shot' ? -thrust * 0.7 : way === 'snipe' ? -thrust * 1.3 : way === 'claw' ? thrust * 1.0 : way === 'lob' || way === 'burst' ? thrust * 0.4 : thrust * 1.6;
+    figure.position.y = way === 'smash' ? thrust * 1.5 : 0;
+    figure.rotation.set(way === 'smash' ? thrust * 0.5 : way === 'lob' && lunge < 1 ? -Math.sin(lunge * TAU) * 0.55 : unit.windup && unit.windup.way === 'snipe' ? 0.18 * charge : 0, way === 'claw' && lunge < 1 ? Math.sin(lunge * TAU) * 0.6 : 0, 0);
+    figure.position.x = time - unit.hurtAt < 0.2 ? Math.sin(time * 95) * 0.25 : 0;
     // 얼어 있는 동안은 동작도 멈춘다.
     view.figure.userData.animate((view.ice.visible ? unit.frozenUntil : time) + unit.phase, Math.abs(unit.vs) > 0.4, unit);
   }
@@ -293,10 +375,12 @@ export function createStage(game, myIndex) {
       crystalViews[n].visible = grown > 0.01; crystalViews[n].scale.setScalar(Math.max(0.001, grown * (0.7 + 0.1 * Math.max(0, crystal.hp))));
     });
     {
-      const durian = game.durian, pop = time >= durian.downUntil ? Math.min(1, (time - durian.bornAt) * 2.5) : 0;
-      durianView.figure.visible = durianView.bar.visible = pop > 0.01; durianView.figure.scale.setScalar(Math.max(0.001, pop));
-      durianView.figure.userData.animate(time, false, null);
-      durianView.bar.quaternion.copy(camera.quaternion); durianView.fill.scale.x = Math.max(0.001, durian.hp / 12); durianView.fill.position.x = -2 * (1 - Math.max(0, durian.hp) / 12);
+      // 차단벽: 부서지면 셔터가 바닥으로 꺼지고 경광등이 꺼진다. 다시 닫힐 때는 올라온다.
+      const barrier = game.barrier, up = time >= barrier.downUntil && barrier.hp > 0, shut = up ? Math.min(1, (time - barrier.bornAt) * 2.5) : 0;
+      gate.shutter.scale.y = Math.max(0.02, shut); gate.shutter.visible = shut > 0.02;
+      for (const lamp of gate.lamps) lamp.visible = up && Math.sin(time * 6) > -0.3;
+      gate.bar.visible = up; gate.bar.quaternion.copy(camera.quaternion);
+      gate.fill.scale.x = Math.max(0.001, barrier.hp / 12); gate.fill.position.x = -2 * (1 - Math.max(0, barrier.hp) / 12);
     }
     game.sites.forEach((site, n) => {
       const view = siteViews[n];
@@ -345,21 +429,48 @@ export function createStage(game, myIndex) {
       locate(coin.s, coin.lane, at); coinViews[n].position.set(at.x, TRACK_Y + 0.8, at.z); coinViews[n].rotation.z = time * 4;
     });
 
-    // 공격 범위와 조준 표시.
-    const aim = pawn ? game.hitTarget(pawn) : null;
-    rangeRing.visible = !!pawn; reticle.visible = !!aim;
-    if (pawn) {
-      const p = views[pawn.index].group.position;
-      rangeRing.position.set(p.x, TRACK_Y + 0.12, p.z); rangeRing.scale.setScalar(game.reachOf(pawn) + BODY); rangeRing.rotation.y = time * 0.3;
-      rangeRing.material.color.copy(aim ? RANGE_AIM : RANGE_IDLE); rangeRing.material.opacity = aim ? 0.95 : time >= pawn.nextHit ? 0.6 : 0.2;
+    // 내 공격 범위와 조준 표시.
+    const way = pawn ? game.attackOf(pawn) : null, aimed = way ? game.aimAt(pawn) : [];
+    // 터뜨리기와 던지기는 범위 안의 모두가, 나머지는 가장 먼저 닿는 하나가 맞는다.
+    const marks = way && (way.shape === 'burst' || way.shape === 'lob') ? aimed.slice(0, reticles.length) : aimed.slice(0, 1);
+    if (way) {
+      drawTrail(range, outline(way, pawn), 0.2, TRACK_Y + 0.12);
+      range.mesh.material.color.copy(marks.length ? RANGE_AIM : RANGE_IDLE); range.mesh.material.opacity = marks.length ? 0.95 : time >= pawn.nextHit ? 0.6 : 0.2;
+    } else range.mesh.visible = false;
+    reticles.forEach((mesh, n) => {
+      const mark = marks[n]; mesh.visible = !!mark; if (!mark) return;
+      const q = worldOf(mark); mesh.position.set(q.x, TRACK_Y + 0.16, q.z); mesh.scale.setScalar((mark.r || BODY) + 1.5 + Math.sin(time * 9) * 0.15); mesh.rotation.y = -time * 2.5;
+    });
+    // 예고: 누가 조준하고 있는지, 어디가 터질지, 던진 것이 어디에 떨어질지.
+    let warned = 0;
+    for (const unit of game.units) {
+      if (!unit.windup || unit.rank || warned >= warnings.length) continue;
+      const warning = warnings[warned++], charge = (time - unit.windup.at) / (unit.windup.until - unit.windup.at);
+      drawTrail(warning, outline(ATTACKS[unit.windup.way], unit), 0.3, TRACK_Y + 0.13); warning.mesh.material.opacity = 0.35 + 0.6 * charge;
     }
-    if (aim) { const q = worldOf(aim); reticle.position.set(q.x, TRACK_Y + 0.16, q.z); reticle.scale.setScalar((aim.r || BODY) + 1.5 + Math.sin(time * 9) * 0.15); reticle.rotation.y = -time * 2.5; }
+    game.shells.forEach((shell, n) => {
+      const ballView = shellViews[n];
+      ballView.visible = shell.live; if (!shell.live || warned >= warnings.length) return;
+      const k = Math.min(1, (time - shell.thrownAt) / (shell.landAt - shell.thrownAt));
+      const ds = shortest(shell.s - shell.fromS);
+      locate(shell.fromS + ds * k, shell.fromLane + (shell.lane - shell.fromLane) * k, at);
+      ballView.position.set(at.x, TRACK_Y + 1.6 + Math.sin(k * Math.PI) * 5, at.z);
+      const warning = warnings[warned++];
+      drawTrail(warning, Array.from({ length: 33 }, (_, j) => [shell.s + Math.cos((j / 32) * TAU) * shell.radius, shell.lane + Math.sin((j / 32) * TAU) * shell.radius]), 0.3, TRACK_Y + 0.13); warning.mesh.material.opacity = 0.35 + 0.6 * k;
+    });
+    for (let n = warned; n < warnings.length; n++) warnings[n].mesh.visible = false;
+    for (const tracer of tracers) { const k = (time - tracer.at) / tracer.life; tracer.trail.mesh.visible = k >= 0 && k < 1; if (k >= 0 && k < 1) tracer.trail.mesh.material.opacity = 1 - k; }
     for (const slash of slashes) {
-      const k = (time - slash.at) / 0.34;
+      const k = (time - slash.at) / slash.life;
       slash.mesh.visible = k >= 0 && k < 1; if (!slash.mesh.visible) continue;
       const p = views[slash.unit].group.position;
-      slash.mesh.position.set(p.x, TRACK_Y + 1.5, p.z); slash.mesh.rotation.y = slash.dir + (0.5 - Math.min(1, k * 1.7)) * 1.7;
+      slash.mesh.position.set(p.x, TRACK_Y + 1.5, p.z); slash.mesh.rotation.y = slash.dir + slash.sweep * (0.5 - Math.min(1, k * 1.7)) * 1.7;
       slash.mesh.scale.setScalar(slash.reach * (0.8 + 0.2 * k)); slash.mesh.material.opacity = Math.min(1, 1.5 * (1 - k));
+    }
+    for (const ring of rings) {
+      const k = (time - ring.at) / ring.life;
+      ring.mesh.visible = k >= 0 && k < 1; if (!ring.mesh.visible) continue;
+      ring.mesh.scale.setScalar(ring.radius * (0.25 + 0.75 * k)); ring.mesh.material.opacity = 0.9 * (1 - k);
     }
     for (const b of bursts) {
       const k = (time - b.at) / 0.26;
@@ -382,5 +493,16 @@ export function createStage(game, myIndex) {
     energyMaterial.uniforms.t.value = time;
   }
 
-  return { views, sync, handle };
+  // 도감에서 한 명을 볼 때: 그 캐릭터의 공격 범위를 받침대 위에 그려 보여준다. entry가 없으면 지운다.
+  const podRange = makeTrail(48, additive('#ffffff', 1.6, null, 0.7));
+  function showPodRange(entry) {
+    const way = entry && INFO[entry.id].atk ? ATTACKS[ATTACK_OF[entry.id] || 'smash'] : null;
+    if (!way) { podRange.mesh.visible = false; return; }
+    // 받침대 가운데에서 카메라 쪽(+z)을 보고 선 것으로 친다.
+    const who = { s: 0, lane: 0, dirS: 1, dirL: 0 };
+    const points = way.shape === 'lob' ? Array.from({ length: 33 }, (_, k) => [way.reach + Math.cos((k / 32) * TAU) * way.radius, Math.sin((k / 32) * TAU) * way.radius]) : outline(way, who);
+    drawTrail(podRange, points, 0.16, 0.56, (along, across) => [entry.x - across, entry.z + along]);
+  }
+
+  return { views, sync, handle, showPodRange };
 }

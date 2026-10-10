@@ -1,4 +1,4 @@
-// 캐릭터 서른여섯 종의 모델. 저마다 그룹에 도형을 붙이고, 매 프레임 불릴 동작 함수를 돌려준다.
+// 캐릭터 모델. 저마다 그룹에 도형을 붙이고, 매 프레임 불릴 동작 함수를 돌려준다.
 import { C, FONT_KR, GOLD, PUPIL, SKIN, TAU, UP, V, WHITE, add, additive, ball, box, canvasTexture, cyl, eye, eyes, glow, label, limb, rbox, repeatTex, spun, std, toy } from './tools.js';
 import { M } from './world.js';
 
@@ -159,40 +159,6 @@ export const MODELS = {
       crank.rotation.x = t * 4;
       for (const b of balls) { p.set(Math.sin(t * b.a + b.p), Math.sin(t * b.b + b.p * 1.3), Math.cos(t * b.c + b.p * 0.7)).multiplyScalar(0.86); if (p.length() > 0.9) p.setLength(0.9); b.mesh.position.set(p.x, 3.05 + p.y, p.z); }
       bulbs.forEach((bulb, n) => { bulb.visible = Math.floor(t * 5 + n) % 3 !== 0; });
-    };
-  },
-
-  // 두리안: 가시투성이 거대 과일. 거만한 눈으로 길 한가운데에 앉아 있다.
-  durian(g) {
-    const rind = toy('#8f9a34', 0.8, { clearcoat: 0.15 }), tip = toy('#c9c05a', 0.7, { clearcoat: 0.1 });
-    const body = new THREE.Group(); body.position.y = 2.4; g.add(body);
-    ball(body, 1.9, rind, 0, 0, 0, 1, 1.1, 1);
-    const src = new THREE.IcosahedronGeometry(1, 2).attributes.position, seen = new Set(), dirs = [];
-    for (let k = 0; k < src.count; k++) {
-      const v = new THREE.Vector3().fromBufferAttribute(src, k).normalize(), key = v.toArray().map((n) => n.toFixed(2)).join();
-      if (seen.has(key)) continue; seen.add(key);
-      if (v.z > 0.6 && v.y > -0.45 && v.y < 0.5) continue;
-      dirs.push(v);
-    }
-    const spikes = new THREE.InstancedMesh(new THREE.ConeGeometry(0.3, 0.8, 7), tip, dirs.length), dummy = new THREE.Object3D();
-    dirs.forEach((v, n) => { dummy.position.set(v.x * 2.12, v.y * 2.12 * 1.1, v.z * 2.12); dummy.quaternion.setFromUnitVectors(UP, v); dummy.updateMatrix(); spikes.setMatrixAt(n, dummy.matrix); });
-    spikes.castShadow = true; body.add(spikes);
-    cyl(body, 0.14, 0.22, 0.9, toy('#6b4a2a', 0.8), 0.1, 2.45, 0, 10).rotation.z = -0.2;
-    ball(body, 0.42, toy('#5c8a2e', 0.6), 0.52, 2.62, 0, 1, 0.14, 0.55).rotation.z = 0.5;
-    for (const s of [1, -1]) {
-      eye(body, s * 0.56, 0.36, 1.7, 0.31, { look: [0.4, -0.1], lid: 1.2, lidMat: rind });
-      ball(body, 0.2, toy('#e88b6a', 0.8), s * 1.02, -0.12, 1.54, 1, 0.6, 0.4);
-      ball(g, 0.42, rind, s * 0.8, 0.26, 0.5, 1, 0.6, 1.35);
-    }
-    add(body, new THREE.TorusGeometry(0.36, 0.06, 8, 20, Math.PI * 0.8), PUPIL, 0.1, -0.3, 1.82).rotation.z = Math.PI + 0.45;
-    const fume = canvasTexture(64, 256, (c) => { c.strokeStyle = '#ffffff'; c.lineWidth = 9; c.lineCap = 'round'; c.beginPath(); c.moveTo(32, 250); for (let y = 250; y > 6; y -= 4) c.lineTo(32 + Math.sin(y * 0.055) * 18, y); c.stroke(); });
-    const fumes = [-1.1, 0.1, 1.2].map((x, n) => {
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: fume, color: C('#d8ff6a'), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-      s.scale.set(0.9, 2.6, 1); g.add(s); return { s, x, n };
-    });
-    return (t) => {
-      const breathe = 1 + Math.sin(t * 1.4) * 0.015; body.scale.set(breathe, 2 - breathe, breathe);
-      for (const f of fumes) { const k = (t * 0.25 + f.n * 0.33) % 1; f.s.position.set(f.x + Math.sin(t + f.n) * 0.15, 5.4 + k * 2.2, 0.4); f.s.material.opacity = 0.55 * Math.sin(k * Math.PI); }
     };
   },
 

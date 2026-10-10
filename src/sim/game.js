@@ -7,10 +7,10 @@
 //   game.step(dt, { 0: { f: 1, a: 0, cast: false, strike: false } });   // 사람이 모는 자리만 입력을 준다
 //   for (const event of game.events.splice(0)) { ... }                    // 팝업, 알림, 효과
 import { TOTAL, LEG, WIDTH, CANYON, START_S, WALL_S, overChasm, indexAt, sectionAt, sectionStart, halfAt, fitLane } from './track.js';
-import { INFO, ROSTER, SIZE, WHEELED, FIXED_GAIN, ODDS, PLAYERS } from './characters.js';
+import { INFO, ROSTER, SIZE, WHEELED, FIXED_GAIN, ODDS, PLAYERS, ATTACKS, ATTACK_OF } from './characters.js';
 
 export const SPEED = 2.0, FREEZE_RADIUS = 7, BODY = 1.3;
-// 두리안과 다리 포탑의 자리.
+// 협곡 차단벽과 다리 포탑의 자리.
 export const BLOCK_AT = 2 * LEG + (CANYON[0] + CANYON[1]) / 2, BRIDGE_AT = LEG + 9;
 export const DEFAULT_RULES = { players: 8, seconds: 300, goal: 100 };
 
@@ -31,10 +31,14 @@ export function createGame({ random = Math.random } = {}) {
     lungeAt: -9, hurtAt: -9, nextSkill: 0, nextHit: 0,
     grudge: null, grudgeUntil: 0, carriedBy: null, cargo: null, cargoUntil: 0, riding: null, riddenBy: null, ridingUntil: 0,
     pump: 0, smash: 0, jam: 0, jamAt: 0, wiggle: '', chicks: 0, lied: false, flipAt: undefined,
+    dirS: 1, dirL: 0, windup: null, weakUntil: 0, swing: '',
     ai: { lane: 0, think: 0, delay: 1 },
   }));
-  // 두리안: 협곡을 통째로 막는 장애물. 공격하거나 여럿이 밀어야 부서지고, 조금 뒤 다시 나타난다.
-  const durian = { kind: 'durian', index: 0, fixed: true, thing: true, ram: true, s: BLOCK_AT, lane: 0, r: 2.35, vs: 0, hp: 12, downUntil: 0, bornAt: 0 };
+  // 차단벽: 협곡을 통째로 막는 맵의 문. 공격하거나 여럿이 밀어야 부서지고, 조금 뒤 다시 닫힌다.
+  // 길을 가로지르는 벽이라 충돌은 나란한 세 토막으로 나눠 받고, 체력은 하나를 함께 쓴다.
+  const barrier = { kind: 'barrier', index: 0, s: BLOCK_AT, lane: 0, hp: 12, downUntil: 0, bornAt: 0, parts: [] };
+  barrier.parts = [-2.3, 0, 2.3].map((lane, index) => ({ kind: 'barrierPart', index, fixed: true, thing: true, ram: true, s: BLOCK_AT, lane, r: 1.25, vs: 0, get hp() { return barrier.hp; }, set hp(value) { barrier.hp = value; } }));
+  const barrierUp = () => now >= barrier.downUntil && barrier.hp > 0;
   // 1구간의 수정 벽: 출발선 앞을 통째로 막는다. 때리거나 몸으로 밀어 부수면 그 칸만 열리고, 25초 뒤 다시 자란다.
   const crystals = Array.from({ length: 7 }, (_, index) => ({ kind: 'crystal', index, fixed: true, thing: true, ram: true, s: WALL_S, lane: (index - 3) * (20 / 7), r: 10 / 7, vs: 0, hp: 3, up: true, downUntil: 0, bornAt: -9 }));
   // 로동로봇의 가건물: 길을 막고, 다 지어지면 지은 사람에게 점수를 준다.
@@ -51,7 +55,9 @@ export function createGame({ random = Math.random } = {}) {
   const bombs = Array.from({ length: 2 }, (_, index) => ({ kind: 'bomb', index, live: false, carrier: null, fuseUntil: 0, passAt: 0, by: null }));
   // 돼지 저금통이 깨지며 흩어지는 동전.
   const coins = Array.from({ length: 8 }, (_, index) => ({ kind: 'coin', index, s: 0, lane: 0, live: false }));
-  Object.assign(game, { units, durian, crystals, sites, slimes, chicks, turrets, decoys, bombs, coins });
+  // 던진 것. 잠깐 날아가 떨어진 자리의 모두를 친다.
+  const shells = Array.from({ length: 8 }, (_, index) => ({ kind: 'shell', index, live: false, by: null, fromS: 0, fromLane: 0, s: 0, lane: 0, thrownAt: 0, landAt: 0, radius: 3, damage: 1, knock: 0 }));
+  Object.assign(game, { units, barrier, crystals, sites, slimes, chicks, turrets, decoys, bombs, coins, shells });
 
   // ---------- 사건 ----------
   // 사건은 숫자와 글자만 담는다. 그대로 네트워크로 보낼 수 있어야 하기 때문이다.
@@ -75,7 +81,6 @@ export function createGame({ random = Math.random } = {}) {
   const safe = (u) => !!u.rank || u.id === 'heuong' || u.frozenUntil > now || u.safeUntil > now || u.burrowUntil > now || !!u.carriedBy;
   const targets = (unit) => units.filter((o) => o !== unit && !safe(o));
   const leader = (unit) => targets(unit).sort((a, b) => b.score - a.score)[0];
-  const reachOf = (u) => u.type.reach || 3.6;
   // 분신이 진짜보다 가까우면 능력은 분신에게 날아가 헛돈다.
   const DUD = { dud: true };
   function popDecoy(d, quiet) {
@@ -121,7 +126,7 @@ export function createGame({ random = Math.random } = {}) {
   function become(unit, id) {
     if (unit.cargo) drop(unit, false);
     if (unit.riding) unride(unit); if (unit.riddenBy) unride(unit.riddenBy);
-    unit.burrowUntil = 0; unit.lied = false; unit.pump = 0; unit.smash = 0;
+    unit.burrowUntil = 0; unit.lied = false; unit.pump = 0; unit.smash = 0; unit.windup = null; unit.weakUntil = 0;
     unit.id = id; unit.type = INFO[id]; unit.bornAt = now;
     unit.r = SIZE[id] || BODY; unit.hp = unit.type.hp; unit.jam = 0; unit.chicks = id === 'hen' ? 5 : 0;
     unit.nextSkill = now + (id === 'genki' ? 6 : id === 'pot' ? 30 : id === 'rent' ? 2 : 0.6);
@@ -141,7 +146,7 @@ export function createGame({ random = Math.random } = {}) {
     popup('아웃', '#ff5d5d', u);
     tell(u, why);
     if (u.carriedBy) { u.carriedBy.cargo = null; u.carriedBy = null; }
-    u.s = sectionStart(u.sec); u.vs = 0; u.frozenUntil = u.slowUntil = u.stunUntil = u.ticketUntil = 0;
+    u.s = sectionStart(u.sec); u.vs = 0; u.dirS = 1; u.dirL = 0; u.frozenUntil = u.slowUntil = u.stunUntil = u.ticketUntil = 0;
     emit('respawn', { unit: u.index });
     become(u, pickType(u.sec));
     u.safeUntil = now + 1.5;
@@ -152,6 +157,8 @@ export function createGame({ random = Math.random } = {}) {
     if (safe(target)) return;
     target.hurtAt = now; burst(target, 4.2);
     if (by && by.grudge === target && now < by.grudgeUntil) amount *= 2;
+    // 안감^^에게 맞은 사람은 잠시 더 아프게 맞는다.
+    if (target.weakUntil > now) amount += 1;
     if (by) { target.grudge = by; target.grudgeUntil = now + 10; }
     target.hp -= amount;
     if (target.hp <= 0) die(target, why || (by ? `${by.player.name}의 ${by.type.name}에게 죽었습니다` : '죽었습니다'));
@@ -171,35 +178,83 @@ export function createGame({ random = Math.random } = {}) {
   }
 
   // ---------- 공격 ----------
-  // 공격이 닿는 상대: 가까운 순서로 고르되, 보복할 상대가 닿으면 그쪽을 먼저 친다.
-  function hitTarget(u) {
-    let best = null;
-    const reach = reachOf(u);
-    const consider = (o, bonus) => { const d = span(u, o) - (o.r || BODY) - bonus; if (d < reach && (!best || d < best.d)) best = { o, d }; };
-    for (const o of units) if (o !== u && !safe(o)) consider(o, o === u.grudge && now < u.grudgeUntil ? 2 : 0);
-    if (now >= durian.downUntil && durian.hp > 0) consider(durian, 0);
-    for (const site of sites) if (site.live && site.owner !== u) consider(site, 0);
-    for (const turret of turrets) if (turret.live && turret.owner !== u) consider(turret, 0);
-    for (const d of decoys) if (d.live && d.owner !== u) consider(d, 0);
-    for (const c of crystals) if (c.up) consider(c, 0);
-    return best && best.o;
+  // 캐릭터마다 공격 방식이 다르다. 방식은 characters.js의 ATTACKS에 있다.
+  const attackOf = (u) => (u.type.atk ? ATTACKS[ATTACK_OF[u.id] || 'smash'] : null);
+  // o가 u에게서 보는 쪽으로 얼마(along), 옆으로 얼마(across), 곧게 얼마(dist) 떨어져 있는지. 트랙을 편 좌표에서 잰다.
+  function offset(u, o) {
+    let ds = o.s - u.s; if (ds > TOTAL / 2) ds -= TOTAL; else if (ds < -TOTAL / 2) ds += TOTAL;
+    const dl = o.lane - u.lane;
+    return { along: ds * u.dirS + dl * u.dirL, across: dl * u.dirS - ds * u.dirL, dist: Math.hypot(ds, dl) };
   }
-  // 휘두른다. 화면은 이 사건을 받아 몸을 틀고 부채꼴 자국을 그린다. 상대가 없으면 허공에 휘두른 것이다.
-  function swing(u, o) {
-    u.lungeAt = now;
-    emit('swing', { unit: u.index, hit: !!o, to: o ? spot(o) : null, reach: reachOf(u) + BODY });
+  // 공격이 닿을 수 있는 것들: 무적이 아닌 다른 선수, 남의 설치물, 맵의 장애물.
+  function hittable(u) {
+    const list = units.filter((o) => o !== u && !safe(o));
+    if (barrierUp()) list.push(...barrier.parts);
+    for (const site of sites) if (site.live && site.owner !== u) list.push(site);
+    for (const turret of turrets) if (turret.live && turret.owner !== u) list.push(turret);
+    for (const d of decoys) if (d.live && d.owner !== u) list.push(d);
+    for (const c of crystals) if (c.up) list.push(c);
+    return list;
   }
-  function basicHit(u, handsOn) {
-    if (!u.type.atk || now < u.nextHit) return false;
-    const o = hitTarget(u);
-    // 직접 누른 공격은 허공에도 휘두른다. 닿는 거리를 눈으로 익힐 수 있다.
-    if (!o) { if (handsOn) { u.nextHit = now + 0.45; swing(u, null); } return false; }
-    u.nextHit = now + (u.type.rate || 0.7);
-    swing(u, o);
-    // 맞은 상대는 조금 밀려난다. 난간 없는 다리에서는 이렇게 떨어뜨릴 수 있다.
-    if (o.kind === 'unit' && !(o.frozenUntil > now) && o.id !== 'pot') { let ds = o.s - u.s; if (ds > TOTAL / 2) ds -= TOTAL; else if (ds < -TOTAL / 2) ds += TOTAL; const dl = o.lane - u.lane, d = Math.hypot(ds, dl) || 1; o.vs += (ds / d) * 9; o.vl += (dl / d) * 13; }
-    hurt(o, u.type.atk, u);
-    return true;
+  // 던지면 떨어질 자리.
+  function landing(u, way) {
+    const s = u.s + u.dirS * way.reach;
+    return { s, lane: fitLane(s, u.lane + u.dirL * way.reach, 0.5) };
+  }
+  // 지금 공격하면 맞는 것들, 가까운 순서. 화면의 조준 표시와 봇의 판단과 실제 타격이 모두 이것을 쓴다.
+  function aimAt(u) {
+    const way = attackOf(u); if (!way) return [];
+    const found = [], drop = way.shape === 'lob' ? landing(u, way) : null;
+    for (const o of hittable(u)) {
+      const r = o.r || BODY;
+      if (drop) { const d = span(drop, o); if (d - r < way.radius) found.push({ o, d }); continue; }
+      const at = offset(u, o);
+      if (way.shape === 'circle') { if (at.dist - r < way.reach) found.push({ o, d: at.dist }); }
+      else if (way.shape === 'burst') { if (at.dist - r < way.radius) found.push({ o, d: at.dist }); }
+      else if (way.shape === 'cone') { if (at.dist - r < way.reach && at.along > -r * 0.5 && Math.abs(at.across) < Math.max(at.along, 0) * 1.6 + r) found.push({ o, d: at.dist }); }
+      else if (at.along > 0 && at.along - r < way.reach && Math.abs(at.across) < way.width + r) found.push({ o, d: at.along });
+    }
+    return found.sort((a, b) => a.d - b.d).map((x) => x.o);
+  }
+  // 한 대를 먹인다: 밀어내고 피해를 준다. from은 밀려나는 방향의 기준점이다.
+  function land(u, o, amount, knock, from = u) {
+    if (knock && o.kind === 'unit' && !(o.frozenUntil > now) && o.id !== 'pot') {
+      let ds = o.s - from.s; if (ds > TOTAL / 2) ds -= TOTAL; else if (ds < -TOTAL / 2) ds += TOTAL;
+      const dl = o.lane - from.lane, d = Math.hypot(ds, dl) || 1; o.vs += (ds / d) * 9 * knock; o.vl += (dl / d) * 13 * knock;
+    }
+    // 로동로봇은 설치물과 장애물을 두 배로 부순다.
+    hurt(o, o.thing && u.id === 'builder' ? amount * 2 : amount, u);
+    if (u.id === 'pot' && o.kind === 'unit' && o.id !== u.id) o.weakUntil = now + 5;
+  }
+  const shout = (u, way, hit, to) => { u.lungeAt = now; u.swing = ATTACK_OF[u.id] || 'smash'; emit('attack', { unit: u.index, way: u.swing, hit, reach: way.reach || way.radius, dirS: u.dirS, dirL: u.dirL, to }); };
+  // 공격 단추를 눌렀을 때. handsOn은 사람이 직접 누른 것인지.
+  function attack(u, handsOn) {
+    const way = attackOf(u); if (!way || now < u.nextHit || u.windup) return;
+    const rate = u.type.rate || way.rate;
+    // 예고가 있는 공격은 먼저 예고를 띄운다. 터지는 것은 release가 맡는다.
+    if (way.windup) { u.windup = { way: ATTACK_OF[u.id], at: now, until: now + way.windup }; u.nextHit = now + way.windup + rate; return; }
+    if (way.shape === 'lob') {
+      const shell = shells.find((x) => !x.live); if (!shell) return;
+      Object.assign(shell, { live: true, by: u, fromS: u.s, fromLane: u.lane, ...landing(u, way), thrownAt: now, landAt: now + way.delay, radius: way.radius, damage: u.type.atk, knock: way.knock });
+      u.nextHit = now + rate; shout(u, way, true, { s: shell.s, lane: shell.lane });
+      return;
+    }
+    const aimed = aimAt(u);
+    // 직선은 처음 닿는 것이 맞는다. 나머지는 보복할 상대가 닿으면 그쪽을 먼저 친다.
+    const o = way.shape === 'line' ? aimed[0] : aimed.find((x) => x === u.grudge && now < u.grudgeUntil) || aimed[0];
+    // 직접 누른 공격은 허공에도 나간다. 닿는 거리를 눈으로 익힐 수 있다.
+    if (!o && !handsOn) return;
+    u.nextHit = now + (o ? rate : Math.min(rate, 0.45));
+    shout(u, way, !!o, o ? spot(o) : null);
+    if (o) land(u, o, u.type.atk + (way.bonus || 0), way.knock);
+  }
+  // 예고가 끝나 터진다. 저격은 처음 닿는 하나를, 터뜨리기는 범위 안의 모두를 친다.
+  function release(u) {
+    const way = attackOf(u); u.windup = null; if (!way) return;
+    const aimed = way.shape === 'burst' ? aimAt(u) : aimAt(u).slice(0, 1);
+    shout(u, way, aimed.length > 0, aimed[0] ? spot(aimed[0]) : null);
+    if (way.shape === 'burst') emit('blast', { ...spot(u), radius: way.radius });
+    for (const o of aimed) land(u, o, u.type.atk + (way.bonus || 0), way.knock);
   }
 
   // ---------- 능력 ----------
@@ -354,7 +409,8 @@ export function createGame({ random = Math.random } = {}) {
   // 전원 0점, 출발선 조금 앞에 두 줄로 선다. 규칙의 인원보다 뒤 자리는 비워 둔다(rank -1).
   function lineUp() {
     game.timeLeft = rules.seconds; game.finished = 0;
-    durian.hp = 12; durian.downUntil = 0;
+    barrier.hp = 12; barrier.downUntil = 0;
+    for (const shell of shells) shell.live = false;
     for (const c of crystals) Object.assign(c, { up: true, hp: 3, downUntil: 0, bornAt: -9 });
     for (const site of sites) site.live = false;
     for (const slime of slimes) slime.until = -1;
@@ -365,7 +421,7 @@ export function createGame({ random = Math.random } = {}) {
     for (const coin of coins) coin.live = false;
     units.forEach((u, n) => {
       u.score = 0; u.rank = n < rules.players ? 0 : -1;
-      u.s = START_S + Math.floor(n / 4) * 3.6; u.lane = (1.5 - (n % 4)) * 3.6; u.vs = u.vl = 0; u.sec = 0;
+      u.s = START_S + Math.floor(n / 4) * 3.6; u.lane = (1.5 - (n % 4)) * 3.6; u.vs = u.vl = 0; u.sec = 0; u.dirS = 1; u.dirL = 0;
       u.frozenUntil = u.slowUntil = u.stunUntil = u.ticketUntil = 0; u.grudge = null; u.carriedBy = u.cargo = null;
       emit('respawn', { unit: u.index });
       become(u, pickType(0));
@@ -398,10 +454,9 @@ export function createGame({ random = Math.random } = {}) {
     }
     const skill = SKILLS[u.id];
     let strike = false;
-    if (u.type.atk && now >= u.nextHit) {
-      const reach = reachOf(u);
-      strike = units.some((o) => o !== u && !safe(o) && span(u, o) - o.r < reach && (o.type.kind !== '꽝' || (o === u.grudge && now < u.grudgeUntil)))
-        || !!(block && block.o.thing && block.o.owner !== u);
+    // 지금 공격하면 맞을 것 가운데 칠 만한 것이 있을 때만 친다: 꽝이 아닌 선수, 보복할 상대, 남의 설치물과 장애물.
+    if (u.type.atk && now >= u.nextHit && !u.windup) {
+      strike = aimAt(u).some((o) => (o.kind === 'unit' ? o.type.kind !== '꽝' || (o === u.grudge && now < u.grudgeUntil) : o.owner !== u));
     }
     return { f: 1, a: Math.max(-1, Math.min(1, (u.lane - goalLane) * 0.9)), cast: !!skill && !skill.auto && now >= u.nextSkill + ai.delay, strike };
   }
@@ -419,9 +474,15 @@ export function createGame({ random = Math.random } = {}) {
       if (c.up && c.hp <= 0) { c.up = false; c.downUntil = now + 25; popup('쨍', '#9fd0ff', c); }
       else if (!c.up && now >= c.downUntil && game.mode !== 'over') { c.up = true; c.hp = 3; c.bornAt = now; }
     }
-    // 두리안.
-    const durianUp = now >= durian.downUntil;
-    if (durianUp && durian.hp <= 0) { durian.hp = 12; durian.bornAt = now; }
+    // 차단벽: 부서진 뒤 12초가 지나면 다시 닫힌다.
+    if (now >= barrier.downUntil && barrier.hp <= 0) { barrier.hp = 12; barrier.bornAt = now; }
+    // 던진 것이 떨어진다. 던진 사람을 뺀, 그 자리의 모두가 맞는다.
+    for (const shell of shells) {
+      if (!shell.live || now < shell.landAt) continue;
+      shell.live = false; emit('blast', { s: shell.s, lane: shell.lane, radius: shell.radius });
+      if (game.mode === 'over') continue;
+      for (const o of hittable(shell.by)) if (span(shell, o) - (o.r || BODY) < shell.radius) land(shell.by, o, shell.damage, shell.knock, shell);
+    }
     // 가건물: 부서지면 사라지고, 20초를 버티면 지은 사람이 30점을 받는다.
     for (const site of sites) {
       if (!site.live) continue;
@@ -473,7 +534,7 @@ export function createGame({ random = Math.random } = {}) {
     }
     for (const u of units) if (u.riding && now > u.ridingUntil) unride(u);
     const solids = [...riders, ...sites.filter((site) => site.live), ...turrets.filter((t) => t.live && t.solid), ...decoys.filter((d) => d.live)];
-    if (durianUp) solids.push(durian);
+    if (barrierUp()) solids.push(...barrier.parts);
     for (const c of crystals) if (c.up) solids.push(c);
 
     // 입력과 봇의 판단, 이동, 능력과 공격.
@@ -504,6 +565,8 @@ export function createGame({ random = Math.random } = {}) {
       u.vs += (wantS - u.vs) * ease;
       u.vl += ((stuck ? 0 : -a * Math.max(top, 3.5) * 0.85) - u.vl) * ease;
       u.s += u.vs * dt; u.lane += u.vl * dt;
+      // 움직이는 쪽을 본다. 공격은 이 방향으로 나간다.
+      const pace = Math.hypot(u.vs, u.vl); if (pace > 0.6) { u.dirS = u.vs / pace; u.dirL = u.vl / pace; }
       // 끼인 스포츠카: 봇은 시간이 지나면 저절로 빠진다.
       if (u.jam > 0 && !u.human && now > u.jamAt + 0.6) { u.jam--; u.jamAt = now; }
 
@@ -513,7 +576,10 @@ export function createGame({ random = Math.random } = {}) {
         if (result === false) { if (handsOn) tell(driver, u.id === 'mold' ? '근처에 남이 지은 설치물이 없습니다' : '쓸 대상이 없습니다'); u.nextSkill = now + 0.8; }
         else if (SKILLS[u.id] === skill) u.nextSkill = now + (typeof result === 'number' ? result : skill.cd);
       }
-      if (!busy && (strike || u.id === 'pot')) basicHit(u, handsOn && strike);
+      // 예고가 끝나면 터진다. 그 사이에 얼거나 묶이면 헛일이 된다.
+      if (u.windup && now >= u.windup.until) { if (busy) u.windup = null; else release(u); }
+      // 안감^^은 누가 범위에 들어오면 저절로 터뜨린다.
+      if (!busy && (strike || (u.id === 'pot' && aimAt(u).length))) attack(u, handsOn && strike);
       if (u.cargo && now > u.cargoUntil) drop(u, false);
       // 달팽이는 지나간 자리에 점액을 남긴다.
       if (u.id === 'snail' && now > u.slimeAt + 0.9 && Math.abs(u.vs) > 0.5) {
@@ -526,7 +592,7 @@ export function createGame({ random = Math.random } = {}) {
       for (const u of riders) if (u !== slime.owner && u.id !== 'heuong' && span(slime, u) < 1.6) u.slowUntil = Math.max(u.slowUntil, now + 0.8);
     }
 
-    // 충돌: 서로 겹치지 않게 밀어낸다. 얼어붙은 유닛, 화분, 두리안, 가건물은 꿈쩍도 하지 않아 길을 막는다.
+    // 충돌: 서로 겹치지 않게 밀어낸다. 얼어붙은 유닛, 화분, 차단벽, 가건물은 꿈쩍도 하지 않아 길을 막는다.
     const fixedNow = (o) => o.fixed || o.frozenUntil > now || o.id === 'pot';
     for (let pass = 0; pass < 2; pass++) for (let i = 0; i < solids.length; i++) for (let j = i + 1; j < solids.length; j++) {
       const A = solids[i], B = solids[j];
@@ -551,7 +617,7 @@ export function createGame({ random = Math.random } = {}) {
         if (x.id === 'eraser' && person && !safe(y) && now > x.touchedAt + 1.5) { x.touchedAt = now; popup('쓱싹', '#f29bb0', y); y.grudge = x; y.grudgeUntil = now + 10; die(y, `${x.player.name}의 지우개에 지워졌습니다`); }
       }
     }
-    if (durianUp && durian.hp <= 0) { durian.downUntil = now + 12; popup('와장창', '#a8e04a', durian); }
+    if (now >= barrier.downUntil && barrier.hp <= 0) { barrier.downUntil = now + 12; popup('와장창', '#ffb347', barrier); }
 
     for (const u of riders) {
       if (u.s >= TOTAL) u.s -= TOTAL; else if (u.s < 0) u.s += TOTAL;
@@ -597,7 +663,7 @@ export function createGame({ random = Math.random } = {}) {
   game.smash = (index) => { const pawn = units[index].riding || units[index]; if (pawn.id === 'piggy') pawn.smash++; };
 
   // 화면과 시험이 쓰는 것들.
-  Object.assign(game, { safe, span, reachOf, hitTarget, become, finish, endMatch, pickType, SKILLS });
+  Object.assign(game, { safe, span, attackOf, aimAt, landing, become, finish, endMatch, pickType, SKILLS });
   game.demo();
   events.length = 0;
   return game;

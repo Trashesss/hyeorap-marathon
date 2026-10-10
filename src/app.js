@@ -1,7 +1,7 @@
 // 게임을 굴리는 곳: 계산(sim)을 한 걸음씩 돌리고, 그 결과를 화면(view)과 버튼, 알림에 잇는다.
 // 지금은 계산이 이 브라우저 안에서 돈다. 서버가 붙으면 game 자리에 서버의 상태를 받아 오는 것이 들어온다.
 import { createGame, DEFAULT_RULES } from './sim/game.js';
-import { ACT } from './sim/characters.js';
+import { ACT, ATTACKS, ATTACK_OF } from './sim/characters.js';
 import { canvas } from './view/renderer.js';
 import { camera, sun } from './view/world.js';
 import { createStage, drawBoard } from './view/stage.js';
@@ -11,6 +11,7 @@ const game = createGame();
 const MY_INDEX = 0;
 const me = game.units[MY_INDEX];
 const stage = createStage(game, MY_INDEX);
+screen.whenCardChanges(stage.showPodRange);
 const $ = (id) => document.getElementById(id);
 const clockEl = $('clock'), bannerEl = $('banner'), toastEl = $('toast'), skillEl = $('skill'), hitEl = $('hit'), padEl = $('pad');
 const introEl = $('intro'), watchEl = $('watch'), menuEl = $('menu'), appEl = $('app'), nameEl = $('name'), roomNameEl = $('roomName'), pipEl = screen.pipEl;
@@ -53,7 +54,8 @@ function introduce() {
   introEl.querySelector('.skill').textContent = info.skill;
   introEl.querySelector('.how').textContent = info.how;
   introEl.querySelector('.score').textContent = info.score;
-  introEl.querySelector('.hp').textContent = (info.hp === Infinity ? '무적' : info.hp) + ' · ' + (info.atk ? (info.atk >= 99 ? '공격 한 대면 즉사' : `공격 한 대에 ${info.atk}`) : '공격 못 함');
+  introEl.querySelector('.hp').textContent = info.hp === Infinity ? '무적' : info.hp;
+  introEl.querySelector('.atk').textContent = screen.attackLine(pawn.id);
   introEl.hidden = spectate || game.mode !== 'play'; introEl.classList.add('fresh'); introUntil = performance.now() + 4200;
 }
 // 잠깐 떴다 사라지는 알림. 판을 멈추지 않는다.
@@ -313,7 +315,7 @@ function updateHud() {
   skillEl.querySelector('b').textContent = state || act || '누르는 능력 없음';
   skillEl.querySelector('span').textContent = !act || state ? '' : wait > 0 ? `${Math.ceil(wait)}초` : '스페이스';
   skillEl.disabled = !act || !!state || wait > 0;
-  hitEl.querySelector('b').textContent = pawn.type.atk ? '공격' : '공격 불가';
+  hitEl.querySelector('b').textContent = pawn.type.atk ? ATTACKS[ATTACK_OF[pawn.id] || 'smash'].name : '공격 불가';
   hitEl.querySelector('span').textContent = pawn.type.atk ? 'F' : '';
   hitEl.disabled = !pawn.type.atk || !!state;
   padEl.style.setProperty('--dot', pawn.type.color);

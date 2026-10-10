@@ -123,3 +123,60 @@ test('리드미의 캐릭터 표가 캐릭터 자료와 같다', async () => {
   const readme = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
   assert.equal(render(readme), readme, 'npm run docs:characters 를 돌려 표를 다시 만들어야 한다');
 });
+
+// 공격 시험에 쓰는 무대: 0번이 공격하고 1번이 맞는다. 나머지는 멀리 치운다.
+function duel(id, place) {
+  const game = createGame({ random: seeded(31) });
+  game.start({ players: 8, seconds: 300, goal: 1000 });
+  const [me, foe] = game.units;
+  game.units.forEach((u, n) => { if (n > 1) { u.s = 290 + n * 8; u.sec = 3; u.stunUntil = 1e9; } u.safeUntil = 0; });
+  game.become(me, id); game.become(foe, 'rent');
+  Object.assign(me, { s: 120, lane: 0, sec: 1, dirS: 1, dirL: 0, nextHit: 0, nextSkill: 1e9, safeUntil: 0 });
+  Object.assign(foe, { s: 120 + place.along, lane: place.across || 0, sec: 1, hp: 50, safeUntil: 0, stunUntil: 1e9 });
+  return { game, me, foe };
+}
+const hold = (game, seconds, strike = true) => { for (let n = 0; n < seconds * 30; n++) game.step(DT, { 0: { f: 0, a: 0, cast: false, strike } }); };
+
+test('할퀴기와 쏘기는 보는 쪽으로만 나간다', () => {
+  for (const [id, along] of [['liar', 2.5], ['flipper', 8]]) {
+    const front = duel(id, { along }); hold(front.game, 0.3);
+    assert.ok(front.foe.hp < 50, `${id}: 앞에 있는 상대는 맞는다`);
+    const back = duel(id, { along: -along }); hold(back.game, 0.3);
+    assert.equal(back.foe.hp, 50, `${id}: 뒤에 있는 상대는 안 맞는다`);
+  }
+});
+
+test('쏘기는 처음 닿는 것만 맞는다', () => {
+  const { game, foe } = duel('flipper', { along: 9 });
+  const wall = game.units[2]; game.become(wall, 'rent'); Object.assign(wall, { s: 124, lane: 0, sec: 1, hp: 50, safeUntil: 0, stunUntil: 1e9 });
+  hold(game, 0.3);
+  assert.ok(wall.hp < 50); assert.equal(foe.hp, 50);
+});
+
+test('저격은 예고가 끝난 뒤에 멀리까지 닿는다', () => {
+  const { game, me, foe } = duel('parking', { along: 20 });
+  hold(game, 0.2); assert.ok(me.windup, '누르면 예고가 뜬다'); assert.equal(foe.hp, 50);
+  hold(game, 0.6, false); assert.equal(foe.hp, 48, '예고가 끝나면 2가 깎인다');
+});
+
+test('던지기는 떨어진 자리의 모두를 치고, 가까이는 못 친다', () => {
+  const far = duel('cannon', { along: 9 }); hold(far.game, 0.1); hold(far.game, 1.0, false);
+  assert.ok(far.foe.hp < 50, '9칸 앞은 맞는다');
+  const near = duel('cannon', { along: 2.5 }); hold(near.game, 0.1); hold(near.game, 1.0, false);
+  assert.equal(near.foe.hp, 50, '바로 앞은 안 맞는다');
+});
+
+test('짱돌은 예고 뒤에 주변의 모두를 죽이고, 밖으로 나가면 산다', () => {
+  const inside = duel('boulder', { along: -3, across: 2 }); const startS = inside.foe.s;
+  hold(inside.game, 0.2); hold(inside.game, 0.7, false);
+  assert.notEqual(inside.foe.s, startS, '뒤에 있어도 범위 안이면 죽어서 출발점으로 간다');
+  const outside = duel('boulder', { along: 8 }); hold(outside.game, 0.2); hold(outside.game, 0.7, false);
+  assert.equal(outside.foe.hp, 50);
+});
+
+test('로동로봇은 설치물과 장애물을 두 배로 부순다', () => {
+  const { game, me } = duel('builder', { along: 60 });
+  const part = game.barrier.parts[1]; me.s = part.s - 3; me.sec = 2;
+  hold(game, 0.1);
+  assert.equal(game.barrier.hp, 12 - 4);
+});

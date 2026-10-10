@@ -3,9 +3,9 @@ export const INFO = {
   iceman: { name: '얼음장수', kind: '괴롭히는 패', color: '#59c8ff', speed: 5.5, top: 4.3, hp: 3, atk: 1, score: '18점', origin: '아비터의 무한 스테이시스',
     skill: '앞쪽 넓은 범위를 5초간 얼립니다. 언 사람은 깨지지 않는 얼음덩어리가 되어 길까지 막습니다.',
     how: '스페이스. 내 앞 9칸 지점이 중심입니다.', counter: '얼어 있는 동안은 맞지 않습니다. 풀리면 10초간 보복 피해가 2배입니다.' },
-  parking: { name: '주차 단속', kind: '괴롭히는 패', color: '#3b7bff', speed: 5.5, top: 4.0, hp: 3, atk: 1, score: '17점', origin: '고스트의 락다운(기계에만 통함)',
+  parking: { name: '주차 단속', kind: '괴롭히는 패', color: '#3b7bff', speed: 5.5, top: 4.0, hp: 3, atk: 2, score: '17점', origin: '고스트의 락다운(기계에만 통함)',
     skill: '앞에 있는 바퀴 달린 캐릭터 하나를 12초간 세웁니다. 세워진 사람은 맞아도 피하지 못합니다.',
-    how: '스페이스. 얼음장수, 납치범, 스포츠카, 로동로봇, 대박 화물에게만 통합니다.', counter: '바퀴가 없는 캐릭터에게는 안 통합니다.' },
+    how: '스페이스. 얼음장수, 납치범, 스포츠카, 로동로봇, 대박 화물에게만 통합니다. 공격은 멀리까지 닿는 저격입니다.', counter: '바퀴가 없는 캐릭터에게는 안 통합니다. 붉은 조준선이 보이면 옆으로 비키세요.' },
   exile: { name: '유배', kind: '괴롭히는 패', color: '#b3202a', speed: 4.6, top: 4.4, hp: 4, atk: 2, score: '9점', origin: '워크3판 세종, 리콜',
     skill: '지금 1등을 1구간 맨 처음으로 보냅니다. 거리 제한이 없습니다.',
     how: '스페이스. 다시 쓰려면 20초를 기다립니다.', counter: '1등이 아니면 안 맞습니다. 흐엉에게는 안 통합니다.' },
@@ -26,13 +26,13 @@ export const INFO = {
     how: '스페이스. 2.5초마다 쓸 수 있습니다.', counter: '체력이 낮습니다. 도착한 자리에서 치세요.' },
   builder: { name: '로동로봇', kind: '설치하는 패', color: '#f5b301', speed: 5, top: 4.6, hp: 5, atk: 2, score: '2점', origin: 'SCV의 배럭',
     skill: '가건물을 짓습니다. 길을 막고, 20초 동안 부서지지 않으면 30점을 받습니다. 캐릭터가 바뀌어도 점수는 지은 사람이 받습니다.',
-    how: '스페이스. 내 바로 뒤에 지어집니다.', counter: '가건물을 공격해 부수세요.' },
+    how: '스페이스. 내 바로 뒤에 지어집니다. 공격은 설치물과 장애물에 두 배로 들어가서 수정 벽과 차단벽을 빨리 엽니다.', counter: '가건물을 공격해 부수세요.' },
   heuong: { name: '흐엉', kind: '꽝', color: '#8f84c8', speed: 1.6, top: 10, hp: Infinity, atk: 0, score: '-15점', origin: '속업 안 된 대군주',
     skill: '가장 느리고, 골인하면 15점을 잃습니다. 무적이라 맞아 죽어서 바꿀 수도 없습니다.',
     how: '다음 구간 문까지 가면 바뀝니다. 4구간에서 걸렸다면 결승선을 넘는 수밖에 없습니다.', counter: '건드릴 수 없고, 건드릴 이유도 없습니다. 느려서 길을 막으니 비켜 가세요.' },
-  boulder: { name: '짱돌', kind: '꽝', color: '#9aa0ad', speed: 2.4, top: 3.4, hp: 1, atk: 99, rate: 2, score: '4점', origin: '스타2판 집정관',
-    skill: '한 대 치면 누구든 죽습니다. 하지만 엄청 느리고 체력이 1입니다.',
-    how: 'F로 공격합니다. 한 번 치면 2초를 쉽니다.', counter: '다가오기 전에 먼저 치세요.' },
+  boulder: { name: '짱돌', kind: '꽝', color: '#9aa0ad', speed: 2.4, top: 3.4, hp: 1, atk: 99, score: '4점', origin: '스타2판 집정관',
+    skill: '몸 주변의 모두를 한 번에 죽입니다. 하지만 엄청 느리고 체력이 1입니다.',
+    how: 'F를 누르면 붉은 원이 뜨고 조금 뒤에 터집니다.', counter: '붉은 원이 보이면 밖으로 나가세요. 멀리서 쏘면 한 방입니다.' },
   sportscar: { name: '빠를 거 같냐?', kind: '꽝', color: '#d81e2c', speed: 2.6, top: 2.2, hp: 4, atk: 1, score: '3점', origin: '일반 벌처',
     skill: '생긴 것과 달리 느립니다. 장애물에 부딪히면 끼어서 못 움직입니다.',
     how: '끼면 A와 D를 번갈아 네 번 누르세요.', counter: '앞에 장애물을 두면 끼입니다.' },
@@ -45,8 +45,8 @@ export const INFO = {
   wallet: { name: '마이너스 통장', kind: '꽝', color: '#a86a3a', speed: 4.6, top: 4.4, hp: 3, atk: 0, score: '-10점', origin: '카카루',
     skill: '골인하면 10점이 깎입니다. 4구간에서는 결승선으로 끌려갑니다.',
     how: '4구간에 들어가기 전에 누군가에게 맞아 죽는 것이 살 길입니다.', counter: '죽여주지 않으면 됩니다.' },
-  pot: { name: '안감^^', kind: '꽝', color: '#c8643c', speed: 0, top: 4.2, hp: 3, atk: 2, rate: 1, score: '없음', origin: '디바우러',
-    skill: '못 움직입니다. 가까이 온 사람을 저절로 한 대씩 칩니다. 죽어야 바뀝니다.',
+  pot: { name: '안감^^', kind: '꽝', color: '#c8643c', speed: 0, top: 4.2, hp: 3, atk: 2, score: '없음', origin: '디바우러',
+    skill: '못 움직입니다. 누가 가까이 오면 저절로 주변을 터뜨리고, 맞은 사람은 5초간 더 아프게 맞습니다. 죽어야 바뀝니다.',
     how: '기다리세요. 30초가 지나면 저절로 바뀝니다.', counter: '멀리 돌아가거나, 죽이지 말고 그냥 두세요.' },
   jackpot: { name: '대박 화물', kind: '점수를 흔드는 패', color: '#ffcf5a', speed: 2.0, top: 4.6, hp: 1, atk: 0, score: '90점', origin: '4레인 전용 디파일러',
     skill: '골인하면 90점입니다. 4구간에서만 나오고, 체력이 1이라 한 대 맞으면 끝입니다.',
@@ -105,13 +105,10 @@ export const INFO = {
   ninja: { name: '분신술', kind: '뒤섞는 패', color: '#c7ccd6', speed: 5.6, top: 4.0, hp: 2, atk: 1, score: '6점', origin: '하이 템플러의 환상',
     skill: '가짜 셋을 만듭니다. 가짜는 길을 막고, 나를 노린 능력을 대신 맞아 줍니다.',
     how: '스페이스. 가짜는 10초 뒤 사라집니다.', counter: '가짜는 한 대 맞으면 터집니다.' },
-  durian: { name: '두리안', kind: '장애물', special: true, color: '#a8b33c', speed: 0, top: 5.6, hp: 12, atk: 0, score: '없음', origin: '스타2판 파인애플',
-    skill: '3구간 협곡을 통째로 막고 있습니다.',
-    how: '조종하는 캐릭터가 아닙니다.', counter: '공격하거나 여럿이 밀어서 부수세요. 12초 뒤 다시 나타납니다.' },
 };
 // 키 큰 캐릭터가 앞사람을 가리지 않도록 뒷줄부터 키 순서로 세운다.
 export const ROWS = [
-  ['heuong', 'genki', 'lotto', 'durian', 'flipper', 'moldhouse', 'liar', 'snail', 'van'],
+  ['heuong', 'genki', 'lotto', 'flipper', 'moldhouse', 'liar', 'snail', 'van'],
   ['builder', 'owl', 'jackpot', 'blink', 'possess', 'bomber', 'exile', 'wallet', 'cannon'],
   ['iceman', 'pot', 'draw', 'parking', 'ninja', 'swap', 'rent', 'copier', 'hen'],
   ['ghost', 'eraser', 'boulder', 'reset', 'homesick', 'dog', 'piggy', 'mold', 'sportscar'],
@@ -135,3 +132,24 @@ export const WHEELED = new Set(['iceman', 'van', 'sportscar', 'jackpot', 'builde
 export const FIXED_GAIN = { possess: 6, bomber: 5, cannon: 4, draw: 6, homesick: 6, dog: 35, piggy: 1, liar: 5, mold: 2, moldhouse: 78, ninja: 6, iceman: 18, parking: 17, exile: 9, van: 8, snail: 7, swap: 6, copier: 6, blink: 5, builder: 2, heuong: -15, boulder: 4, sportscar: 3, rent: 0, wallet: -10, jackpot: 90, owl: 6, ghost: -7, genki: 0, pot: 0 };
 // 뽑힐 확률의 배율. 판을 크게 흔드는 캐릭터는 원작처럼 드물게 나온다.
 export const ODDS = { heuong: 0.4, jackpot: 0.5, pot: 0.5, genki: 0.5, flipper: 0.6 };
+
+// 공격 방식. 캐릭터가 보는 쪽(움직이는 쪽)으로 나간다. 수치는 초안이다.
+//   reach 닿는 거리, width 직선의 반폭, radius 범위의 반지름, rate 다시 칠 때까지의 초,
+//   windup 예고가 뜨고 나서 터질 때까지의 초, delay 던진 것이 떨어질 때까지의 초, knock 밀어내는 세기, bonus 더해지는 피해.
+export const ATTACKS = {
+  claw: { name: '할퀴기', shape: 'cone', reach: 2.8, rate: 0.45, knock: 0, say: '앞쪽 가까이를 빠르게 긁습니다.' },
+  smash: { name: '내려치기', shape: 'circle', reach: 3.2, rate: 0.95, knock: 1.6, say: '몸 주변의 한 명을 찍어 크게 밀어냅니다.' },
+  shot: { name: '쏘기', shape: 'line', reach: 11, width: 1.0, rate: 0.9, knock: 0, say: '보는 쪽으로 곧게 쏩니다. 처음 닿는 것이 맞습니다.' },
+  snipe: { name: '저격', shape: 'line', reach: 22, width: 0.8, rate: 2.2, windup: 0.55, knock: 0, say: '조준선이 먼저 뜨고, 아주 멀리까지 한 발을 쏩니다.' },
+  lob: { name: '던지기', shape: 'lob', reach: 9, radius: 3, delay: 0.8, rate: 1.6, knock: 0.8, say: '앞쪽 떨어진 곳에 던집니다. 떨어진 자리의 모두가 맞습니다. 가까이는 못 칩니다.' },
+  burst: { name: '터뜨리기', shape: 'burst', radius: 4.2, windup: 0.6, rate: 2.4, knock: 0, say: '예고가 뜬 뒤 몸 주변의 모두를 칩니다.' },
+};
+// 공격할 수 있는 캐릭터가 쓰는 방식. 원작에서 어떤 유닛이었는지에 맞췄다.
+export const ATTACK_OF = {
+  liar: 'claw', dog: 'claw', owl: 'claw', ninja: 'claw', ghost: 'claw',
+  exile: 'smash', builder: 'smash', van: 'smash', draw: 'smash',
+  flipper: 'shot', lotto: 'shot', blink: 'shot', iceman: 'shot', copier: 'shot', sportscar: 'shot', possess: 'shot',
+  parking: 'snipe',
+  cannon: 'lob', bomber: 'lob', hen: 'lob',
+  boulder: 'burst', pot: 'burst',
+};
